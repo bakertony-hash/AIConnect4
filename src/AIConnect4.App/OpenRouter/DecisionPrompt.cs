@@ -40,11 +40,10 @@ public static class DecisionPrompt
             ? $"Column {column} is empty. A disc drops to row 0."
             : $"Column {column} has {discs.Count} disc(s) from the bottom: {string.Join('-', discs)}. Next disc lands on row {discs.Count}.";
 
-        return $"[[COL:{column}]] {stack}{TacticSuffix(decision, column)}";
+        return $"[[COL:{column}]] {stack}{WinElseBlockSuffix(decision, column)}";
     }
 
-    /// <summary>One-ply win, else one-ply block, else empty. Uses <see cref="Board.Drop"/> only.</summary>
-    private static string TacticSuffix(Decision decision, Column column)
+    private static string WinElseBlockSuffix(Decision decision, Column column)
     {
         if (decision.Board.Drop(decision.YouAre, column)?.Result is GameResult.Win)
         {
