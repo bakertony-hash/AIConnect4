@@ -1,0 +1,130 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AIConnect4.App.ViewModels"
+        x:Class="AIConnect4.App.Views.MainWindow"
+        x:DataType="vm:ArenaViewModel"
+        Title="AI Connect 4"
+        Width="1100"
+        Height="720"
+        MinWidth="900"
+        MinHeight="600">
+  <DockPanel Margin="16">
+    <TextBlock DockPanel.Dock="Top"
+               Text="{Binding KeyHint}"
+               Foreground="DarkRed"
+               Margin="0,0,0,8"
+               IsVisible="{Binding KeyHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+    <Grid ColumnDefinitions="*,1.4*,*">
+      <!-- Red -->
+      <Border Grid.Column="0" BorderBrush="#CCC" BorderThickness="1" Padding="12" CornerRadius="4" Margin="0,0,8,0">
+        <StackPanel Spacing="8">
+          <TextBlock FontSize="28" FontWeight="Bold" HorizontalAlignment="Center">
+            <Run Text="Wins: " /><Run Text="{Binding Red.Wins}" />
+          </TextBlock>
+          <TextBlock Text="{Binding Red.Title}" FontWeight="SemiBold" FontSize="18" Foreground="Crimson" />
+          <TextBlock Text="Model" />
+          <ComboBox ItemsSource="{Binding Red.Options}"
+                    SelectedItem="{Binding Red.SelectedOption}"
+                    IsEnabled="{Binding Red.SettingsEnabled}"
+                    HorizontalAlignment="Stretch" />
+          <TextBox Watermark="Custom model id"
+                   Text="{Binding Red.CustomModelId}"
+                   IsVisible="{Binding Red.CustomIdVisible}"
+                   IsEnabled="{Binding Red.SettingsEnabled}" />
+          <TextBlock Text="Effort" />
+          <ComboBox ItemsSource="{Binding Red.EffortChoices}"
+                    SelectedItem="{Binding Red.Effort}"
+                    IsEnabled="{Binding Red.EffortEnabled}"
+                    HorizontalAlignment="Stretch" />
+          <TextBlock Text="Speed" />
+          <ComboBox ItemsSource="{Binding Red.SpeedChoices}"
+                    SelectedItem="{Binding Red.Speed}"
+                    IsEnabled="{Binding Red.SpeedEnabled}"
+                    HorizontalAlignment="Stretch" />
+          <TextBlock Text="{Binding Red.ThinkingText, StringFormat=Thinking: {0}}" />
+          <TextBlock Text="{Binding Red.LastDecisionText, StringFormat=Last: {0}}" />
+          <TextBlock Text="{Binding Red.TotalDecisionText, StringFormat=Total: {0}}" />
+          <TextBlock Text="{Binding Red.LastAnswerText, StringFormat=Answer: {0}}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <!-- Centre -->
+      <DockPanel Grid.Column="1" Margin="8,0">
+        <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+            <TextBlock Text="Games to play" VerticalAlignment="Center" />
+            <NumericUpDown Minimum="1"
+                           Maximum="999"
+                           Value="{Binding GameCount}"
+                           IsEnabled="{Binding SettingsEnabled}"
+                           Width="100" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+            <Button Content="Play" Command="{Binding PlayCommand}" MinWidth="88" />
+            <Button Content="Pause" Command="{Binding PauseCommand}" MinWidth="88" />
+            <Button Content="Resume" Command="{Binding ResumeCommand}" MinWidth="88" />
+            <Button Content="New Series" Command="{Binding NewSeriesCommand}" MinWidth="88" />
+          </StackPanel>
+          <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" HorizontalAlignment="Center" />
+          <TextBlock Text="{Binding Draws, StringFormat=Draws: {0}}" HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <Border Background="#1E3A5F" Padding="12" CornerRadius="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <ItemsControl ItemsSource="{Binding Cells}" Width="420" Height="360">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="7" Rows="6" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:BoardCellViewModel">
+                <Ellipse Width="48"
+                         Height="48"
+                         Margin="4"
+                         Fill="{Binding Fill}"
+                         Stroke="{Binding Stroke}"
+                         StrokeThickness="{Binding StrokeThickness}"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+      </DockPanel>
+
+      <!-- Yellow -->
+      <Border Grid.Column="2" BorderBrush="#CCC" BorderThickness="1" Padding="12" CornerRadius="4" Margin="8,0,0,0">
+        <StackPanel Spacing="8">
+          <TextBlock FontSize="28" FontWeight="Bold" HorizontalAlignment="Center">
+            <Run Text="Wins: " /><Run Text="{Binding Yellow.Wins}" />
+          </TextBlock>
+          <TextBlock Text="{Binding Yellow.Title}" FontWeight="SemiBold" FontSize="18" Foreground="#B8860B" />
+          <TextBlock Text="Model" />
+          <ComboBox ItemsSource="{Binding Yellow.Options}"
+                    SelectedItem="{Binding Yellow.SelectedOption}"
+                    IsEnabled="{Binding Yellow.SettingsEnabled}"
+                    HorizontalAlignment="Stretch" />
+          <TextBox Watermark="Custom model id"
+                   Text="{Binding Yellow.CustomModelId}"
+                   IsVisible="{Binding Yellow.CustomIdVisible}"
+                   IsEnabled="{Binding Yellow.SettingsEnabled}" />
+          <TextBlock Text="Effort" />
+          <ComboBox ItemsSource="{Binding Yellow.EffortChoices}"
+                    SelectedItem="{Binding Yellow.Effort}"
+                    IsEnabled="{Binding Yellow.EffortEnabled}"
+                    HorizontalAlignment="Stretch" />
+          <TextBlock Text="Speed" />
+          <ComboBox ItemsSource="{Binding Yellow.SpeedChoices}"
+                    SelectedItem="{Binding Yellow.Speed}"
+                    IsEnabled="{Binding Yellow.SpeedEnabled}"
+                    HorizontalAlignment="Stretch" />
+          <TextBlock Text="{Binding Yellow.ThinkingText, StringFormat=Thinking: {0}}" />
+          <TextBlock Text="{Binding Yellow.LastDecisionText, StringFormat=Last: {0}}" />
+          <TextBlock Text="{Binding Yellow.TotalDecisionText, StringFormat=Total: {0}}" />
+          <TextBlock Text="{Binding Yellow.LastAnswerText, StringFormat=Answer: {0}}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</Window>
