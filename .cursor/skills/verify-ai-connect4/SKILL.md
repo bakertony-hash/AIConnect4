@@ -79,7 +79,7 @@ Stable handles observed in this app (Avalonia exposes `Button.Content` and `Text
 - Main window title: `AI Connect 4`
 - Buttons: `Play`, `Pause`, `Resume`, `New Series`
 - Status (exact): `Ready` when `OPENROUTER_API_KEY` is set; `Ready (API key missing)` otherwise
-- Win labels: Text nodes containing `Wins: ` (two — Red and Yellow)
+- Win labels: exact Text Names `Wins: 0` (two — Red and Yellow; single TextBlock StringFormat bindings)
 - Side titles: `Red`, `Yellow`
 - Labels: `Model`, `Effort`, `Speed`, `Games to play`
 - ComboBoxes (model / effort / speed) often have empty Names; identify by sibling label Text and tree position in a UIA snapshot
@@ -110,7 +110,8 @@ Standards:
 
 ## Helpers
 
-- `helpers/control-c4.ps1` — `launch` (`-Build`, `-WithoutApiKey`), `doctor`, `get-title`, `info`, `wait-name`, `invoke`, `get-enabled`, `find-text`, `assert-text`, `snapshot`, `screenshot`, `cleanup` / `stop`
+- `helpers/control-c4.ps1` — `launch` (`-Build`, `-WithoutApiKey`), `doctor`, `get-title`, `info`, `wait-name`, `invoke`, `get-enabled`, `find-text`, `assert-text`, `snapshot`, `screenshot` (HWND `PrintWindow` with `PW_RENDERFULLCONTENT`), `cleanup` / `stop`
+- `helpers/prove-ready-once.ps1` — one-shot Ready-state smoke: launch without API key, doctor, assert chrome, snapshot + screenshot, cleanup (evidence kept)
 
 ## Maintenance
 

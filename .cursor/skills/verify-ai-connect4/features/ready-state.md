@@ -33,4 +33,5 @@ Preconditions:
 - Avalonia may expose Ready as a Text Name exactly `Ready` or `Ready (API key missing)` — assert the path you launched.
 - ComboBoxes often have blank Names; do not require them for Ready chrome proof.
 - A disabled Play button still appears in the UIA tree; check `get-enabled`, not mere presence.
+- Win labels must be single `TextBlock` bindings (`Wins: {0}`). Multi-`Run` TextBlocks expose empty UIA Names.
 - `ScriptedMoveSource` lives only in tests. It is not a Ready substitute and is not a UI dry-run.

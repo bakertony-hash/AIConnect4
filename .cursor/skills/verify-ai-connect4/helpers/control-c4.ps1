@@ -94,14 +94,18 @@ function Ensure-UiAssemblies {
     Add-Type -AssemblyName UIAutomationTypes -ErrorAction Stop
     Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
     Add-Type -AssemblyName System.Drawing -ErrorAction Stop
-    if (-not ('C4VerifyNative' -as [type])) {
+    if (-not ('C4VerifyNative2' -as [type])) {
         Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
-public static class C4VerifyNative {
+public static class C4VerifyNative2 {
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+  [StructLayout(LayoutKind.Sequential)]
+  public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 }
 "@
     }
@@ -125,10 +129,10 @@ function Get-MainWindow([int]$ProcessId) {
 function Activate-Window($Window) {
     Ensure-UiAssemblies
     $hwnd = [IntPtr]$Window.Current.NativeWindowHandle
-    if ([C4VerifyNative]::IsIconic($hwnd)) {
-        [void][C4VerifyNative]::ShowWindow($hwnd, 9)
+    if ([C4VerifyNative2]::IsIconic($hwnd)) {
+        [void][C4VerifyNative2]::ShowWindow($hwnd, 9)
     }
-    [void][C4VerifyNative]::SetForegroundWindow($hwnd)
+    [void][C4VerifyNative2]::SetForegroundWindow($hwnd)
     Start-Sleep -Milliseconds 200
 }
 
@@ -203,19 +207,38 @@ function Write-UiaTree($Element, [string]$OutPath, [int]$MaxDepth = 8) {
 
 function Save-WindowScreenshot($Window, [string]$OutPath) {
     Ensure-UiAssemblies
-    $bounds = $Window.Current.BoundingRectangle
-    if ($bounds.Width -lt 1 -or $bounds.Height -lt 1) {
-        throw "Window bounding rectangle is empty; is the window minimized?"
+    Activate-Window $Window
+    Start-Sleep -Milliseconds 400
+    $hwnd = [IntPtr]$Window.Current.NativeWindowHandle
+    $rect = New-Object C4VerifyNative2+RECT
+    if (-not [C4VerifyNative2]::GetWindowRect($hwnd, [ref]$rect)) {
+        throw "GetWindowRect failed for HWND $hwnd"
     }
-    $width = [Math]::Max(1, [int][Math]::Ceiling($bounds.Width))
-    $height = [Math]::Max(1, [int][Math]::Ceiling($bounds.Height))
+    $width = [Math]::Max(1, $rect.Right - $rect.Left)
+    $height = [Math]::Max(1, $rect.Bottom - $rect.Top)
+    $fullPath = [System.IO.Path]::GetFullPath($OutPath)
+    $dir = Split-Path -Parent $fullPath
+    if ($dir) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
     $bmp = New-Object System.Drawing.Bitmap $width, $height
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     try {
-        $g.CopyFromScreen([int]$bounds.X, [int]$bounds.Y, 0, 0, $bmp.Size)
-        $dir = Split-Path -Parent $OutPath
-        if ($dir) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-        $bmp.Save($OutPath, [System.Drawing.Imaging.ImageFormat]::Png)
+        $hdc = $g.GetHdc()
+        try {
+            # PW_RENDERFULLCONTENT (2) captures Avalonia / DirectComposition pixels for this HWND.
+            if (-not [C4VerifyNative2]::PrintWindow($hwnd, $hdc, 2)) {
+                throw "PrintWindow failed for HWND $hwnd"
+            }
+        }
+        finally {
+            $g.ReleaseHdc($hdc)
+        }
+        $fs = [System.IO.File]::Open($fullPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+        try {
+            $bmp.Save($fs, [System.Drawing.Imaging.ImageFormat]::Png)
+        }
+        finally {
+            $fs.Dispose()
+        }
     }
     finally {
         $g.Dispose()

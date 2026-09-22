@@ -32,3 +32,4 @@ Preconditions:
 - Score mirrors `SeriesScore` and updates on Finished games, not on every disc drop.
 - Two Text nodes both say `Wins: 0` at Ready — asserting once is enough for zero, but screenshots should show both columns.
 - Do not prove wins by reading ViewModel fields; only UIA Text / screenshots count.
+- If `Wins: N` is missing from the UIA tree, the XAML likely split the label across `Run`s again — restore a single `StringFormat` TextBlock.
