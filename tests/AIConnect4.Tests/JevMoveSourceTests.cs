@@ -4,9 +4,6 @@ namespace AIConnect4.Tests;
 
 public class JevMoveSourceTests
 {
-    private const string ChoiceReply =
-        """{"model":"typesafe/jev-1.13","answers":{"column":{"type":"choice","choice":"4","confidence":0.82,"probabilities":{"2":0.05,"3":0.13,"4":0.82}}},"usage":{"input_tokens":1,"output_tokens":1}}""";
-
     private static readonly Decision Opening = Decision.For(Board.Empty, Player.Red);
 
     private static readonly Decision ColumnOneFull = Decision.For(Games.Play(1, 1, 1, 1, 1, 1), Player.Red);
@@ -14,28 +11,64 @@ public class JevMoveSourceTests
     private static string Choosing(string choice) =>
         JsonSerializer.Serialize(new { answers = new { column = new { type = "choice", choice } } });
 
-    private static async Task<(MoveReply Reply, JsonElement Body)> Ask(Decision decision, string reply)
+    private static string ChoiceWith(string choice, double confidence, Dictionary<string, double> probabilities) =>
+        JsonSerializer.Serialize(new
+        {
+            model = "typesafe/jev-1.13",
+            answers = new
+            {
+                column = new
+                {
+                    type = "choice",
+                    choice,
+                    confidence,
+                    probabilities,
+                },
+            },
+            usage = new { input_tokens = 1, output_tokens = 1 },
+        });
+
+    private static async Task<(MoveReply Reply, JsonElement Body)> Ask(
+        Decision decision,
+        string reply,
+        Random? random = null)
     {
         var handler = FakeHandler.Json(reply);
-        var source = new JevMoveSource(FakeHandler.Client(handler), ModelCatalog.Jev);
+        var source = new JevMoveSource(FakeHandler.Client(handler), ModelCatalog.Jev, random);
         var result = await source.GetMoveAsync(decision, CancellationToken.None);
         return (result, handler.BodyOf(0));
     }
 
+    private static Dictionary<string, int> ColumnByKey(JsonElement criteria) =>
+        criteria.EnumerateObject().ToDictionary(
+            property => property.Name,
+            property =>
+            {
+                var text = property.Value.GetString() ?? "";
+                var marker = "[[COL:";
+                var start = text.IndexOf(marker, StringComparison.Ordinal);
+                Assert.True(start >= 0, text);
+                var numberStart = start + marker.Length;
+                var end = text.IndexOf(']', numberStart);
+                return int.Parse(text[numberStart..end]);
+            });
+
     [Fact]
-    public async Task Request_is_one_choice_question_over_the_legal_columns()
+    public async Task Request_is_one_choice_question_with_opaque_keys()
     {
-        var (_, body) = await Ask(ColumnOneFull, ChoiceReply);
+        var (_, body) = await Ask(ColumnOneFull, Choosing("opt_a"), new Random(1));
 
         Assert.Equal("typesafe/jev-1.13", body.GetProperty("model").GetString());
         var column = body.GetProperty("questions").GetProperty("column");
         Assert.Equal("choice", column.GetProperty("type").GetString());
-        Assert.Equal(["2", "3", "4", "5", "6", "7"], column.GetProperty("criteria").EnumerateObject().Select(property => property.Name));
-        Assert.Equal(
-            "[[COL:2]] Column 2 is empty. A disc drops to row 0.",
-            column.GetProperty("criteria").GetProperty("2").GetString());
+        var keys = column.GetProperty("criteria").EnumerateObject().Select(property => property.Name).ToArray();
+        Assert.Equal(["opt_a", "opt_b", "opt_c", "opt_d", "opt_e", "opt_f"], keys);
+        Assert.All(keys, key => Assert.DoesNotContain(key, new[] { "1", "2", "3", "4", "5", "6", "7" }));
         Assert.StartsWith("Which legal column should you play?", column.GetProperty("instructions").GetString());
         Assert.Contains("state.board", column.GetProperty("instructions").GetString());
+        var byKey = ColumnByKey(column.GetProperty("criteria"));
+        Assert.Equal(new HashSet<int> { 2, 3, 4, 5, 6, 7 }, byKey.Values.ToHashSet());
+        Assert.StartsWith("[[COL:", column.GetProperty("criteria").GetProperty("opt_a").GetString());
         var state = body.GetProperty("state");
         Assert.Equal(Decision.Rules, state.GetProperty("rules").GetString());
         Assert.Equal("You are Red (R). It is your move.", state.GetProperty("you_are").GetString());
@@ -47,65 +80,121 @@ public class JevMoveSourceTests
     }
 
     [Fact]
-    public async Task Criteria_describe_each_column_stack_from_the_bottom()
+    public async Task Same_decision_twice_with_different_seeds_yields_different_key_orders()
     {
-        var decision = Decision.For(Games.Play(4, 4, 4), Player.Yellow);
-        var (_, body) = await Ask(decision, ChoiceReply);
+        var (_, bodyA) = await Ask(Opening, Choosing("opt_a"), new Random(1));
+        var (_, bodyB) = await Ask(Opening, Choosing("opt_a"), new Random(2));
 
-        var criteria = body.GetProperty("questions").GetProperty("column").GetProperty("criteria");
-        Assert.Equal(
-            "[[COL:4]] Column 4 has 3 disc(s) from the bottom: R-Y-R. Next disc lands on row 3.",
-            criteria.GetProperty("4").GetString());
-        Assert.Equal(
-            "[[COL:1]] Column 1 is empty. A disc drops to row 0.",
-            criteria.GetProperty("1").GetString());
+        var orderA = ColumnByKey(bodyA.GetProperty("questions").GetProperty("column").GetProperty("criteria"))
+            .Select(pair => pair.Value)
+            .ToArray();
+        var orderB = ColumnByKey(bodyB.GetProperty("questions").GetProperty("column").GetProperty("criteria"))
+            .Select(pair => pair.Value)
+            .ToArray();
+
+        Assert.Equal(7, orderA.Length);
+        Assert.Equal(new HashSet<int> { 1, 2, 3, 4, 5, 6, 7 }, orderA.ToHashSet());
+        Assert.Equal(new HashSet<int> { 1, 2, 3, 4, 5, 6, 7 }, orderB.ToHashSet());
+        Assert.NotEqual(orderA, orderB);
     }
 
     [Fact]
-    public async Task Empty_board_offers_all_seven_columns_and_no_last_move()
+    public async Task Criteria_keep_stack_facts_and_win_block_markers_under_opaque_keys()
     {
-        var (_, body) = await Ask(Opening, ChoiceReply);
+        var stackDecision = Decision.For(Games.Play(4, 4, 4), Player.Yellow);
+        var (_, stackBody) = await Ask(stackDecision, Choosing("opt_a"), new Random(3));
+        var stackCriteria = stackBody.GetProperty("questions").GetProperty("column").GetProperty("criteria");
+        var stackByColumn = ColumnByKey(stackCriteria).ToDictionary(pair => pair.Value, pair => pair.Key);
+        Assert.Equal(
+            "[[COL:4]] Column 4 has 3 disc(s) from the bottom: R-Y-R. Next disc lands on row 3.",
+            stackCriteria.GetProperty(stackByColumn[4]).GetString());
+        Assert.Equal(
+            "[[COL:1]] Column 1 is empty. A disc drops to row 0.",
+            stackCriteria.GetProperty(stackByColumn[1]).GetString());
 
-        Assert.Equal(["1", "2", "3", "4", "5", "6", "7"], body.GetProperty("questions").GetProperty("column").GetProperty("criteria").EnumerateObject().Select(property => property.Name));
+        var winDecision = Decision.For(Games.Play(1, 7, 2, 7, 3, 6), Player.Red);
+        var (_, winBody) = await Ask(winDecision, Choosing("opt_a"), new Random(4));
+        var winCriteria = winBody.GetProperty("questions").GetProperty("column").GetProperty("criteria");
+        var winTexts = winCriteria.EnumerateObject().Select(property => property.Value.GetString() ?? "").ToList();
+        Assert.Contains(winTexts, text => text.Contains("[[COL:4]]", StringComparison.Ordinal)
+            && text.Contains("Playing here wins immediately.", StringComparison.Ordinal));
+
+        var blockDecision = Decision.For(Games.Play(7, 1, 7, 1, 6, 1), Player.Red);
+        var (_, blockBody) = await Ask(blockDecision, Choosing("opt_a"), new Random(5));
+        var blockTexts = blockBody.GetProperty("questions").GetProperty("column").GetProperty("criteria")
+            .EnumerateObject().Select(property => property.Value.GetString() ?? "").ToList();
+        Assert.Contains(blockTexts, text => text.Contains("[[COL:1]]", StringComparison.Ordinal)
+            && text.Contains("Playing here blocks an immediate opponent win.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Empty_board_offers_seven_opaque_keys_and_no_last_move()
+    {
+        var (_, body) = await Ask(Opening, Choosing("opt_a"), new Random(6));
+
+        var keys = body.GetProperty("questions").GetProperty("column").GetProperty("criteria")
+            .EnumerateObject().Select(property => property.Name).ToArray();
+        Assert.Equal(["opt_a", "opt_b", "opt_c", "opt_d", "opt_e", "opt_f", "opt_g"], keys);
         Assert.False(body.GetProperty("state").TryGetProperty("last_move", out _));
     }
 
     [Fact]
     public async Task Retry_carries_the_prior_failure_as_previous_attempt()
     {
-        var (_, body) = await Ask(ColumnOneFull.Retry(new MoveFailure.IllegalColumn(Column.From(1))), ChoiceReply);
+        var (_, body) = await Ask(
+            ColumnOneFull.Retry(new MoveFailure.IllegalColumn(Column.From(1))),
+            Choosing("opt_a"),
+            new Random(7));
 
         Assert.Equal("Column 1 is full. Pick a legal column.", body.GetProperty("state").GetProperty("previous_attempt").GetString());
     }
 
     [Fact]
-    public async Task Choice_becomes_the_column_with_confidence_and_probabilities_as_reason()
+    public async Task Opaque_choice_maps_to_the_assigned_column_with_reason()
     {
-        var (reply, _) = await Ask(ColumnOneFull, ChoiceReply);
+        var handler = FakeHandler.FromRequest(body =>
+        {
+            using var document = JsonDocument.Parse(body);
+            var criteria = document.RootElement.GetProperty("questions").GetProperty("column").GetProperty("criteria");
+            var keyForFour = criteria.EnumerateObject()
+                .Single(property => (property.Value.GetString() ?? "").Contains("[[COL:4]]", StringComparison.Ordinal))
+                .Name;
+            return ChoiceWith(keyForFour, 0.82, new Dictionary<string, double>
+            {
+                [keyForFour] = 0.82,
+                ["opt_a"] = 0.05,
+                ["opt_b"] = 0.13,
+            });
+        });
+        var source = new JevMoveSource(FakeHandler.Client(handler), ModelCatalog.Jev, new Random(8));
+        var reply = await source.GetMoveAsync(ColumnOneFull, CancellationToken.None);
 
-        Assert.Equal(new MoveReply.Chosen(Column.From(4), "confidence 0.82; 2: 0.05, 3: 0.13, 4: 0.82"), reply);
+        var chosen = Assert.IsType<MoveReply.Chosen>(reply);
+        Assert.Equal(Column.From(4), chosen.Column);
+        Assert.Contains("confidence 0.82", chosen.Reason);
+        Assert.Contains("opt_", chosen.Reason);
     }
 
     [Fact]
-    public async Task Full_column_is_illegal()
+    public async Task Numeric_choice_is_unparseable()
     {
-        var (reply, _) = await Ask(ColumnOneFull, Choosing("1"));
+        var (reply, _) = await Ask(Opening, Choosing("4"), new Random(10));
 
-        Assert.Equal(new MoveReply.Failed(new MoveFailure.IllegalColumn(Column.From(1))), reply);
+        Assert.Equal(new MoveReply.Failed(new MoveFailure.Unparseable("4")), reply);
     }
 
     [Fact]
-    public async Task Out_of_range_choice_is_unparseable()
+    public async Task Unknown_opaque_key_is_unparseable()
     {
-        var (reply, _) = await Ask(Opening, Choosing("9"));
+        var (reply, _) = await Ask(Opening, Choosing("opt_z"), new Random(11));
 
-        Assert.Equal(new MoveReply.Failed(new MoveFailure.Unparseable("9")), reply);
+        Assert.Equal(new MoveReply.Failed(new MoveFailure.Unparseable("opt_z")), reply);
     }
 
     [Fact]
     public async Task Blank_choice_is_empty()
     {
-        var (reply, _) = await Ask(Opening, Choosing(""));
+        var (reply, _) = await Ask(Opening, Choosing(""), new Random(12));
 
         Assert.Equal(new MoveReply.Failed(new MoveFailure.Empty()), reply);
     }
@@ -113,7 +202,7 @@ public class JevMoveSourceTests
     [Fact]
     public async Task Missing_column_answer_is_unparseable_quoting_the_body()
     {
-        var (reply, _) = await Ask(Opening, """{"answers":{}}""");
+        var (reply, _) = await Ask(Opening, """{"answers":{}}""", new Random(13));
 
         var failed = Assert.IsType<MoveReply.Failed>(reply);
         var unparseable = Assert.IsType<MoveFailure.Unparseable>(failed.Failure);
@@ -123,7 +212,7 @@ public class JevMoveSourceTests
     [Fact]
     public async Task Non_json_body_is_unparseable()
     {
-        var (reply, _) = await Ask(Opening, "<html>");
+        var (reply, _) = await Ask(Opening, "<html>", new Random(14));
 
         Assert.Equal(new MoveReply.Failed(new MoveFailure.Unparseable("<html>")), reply);
     }

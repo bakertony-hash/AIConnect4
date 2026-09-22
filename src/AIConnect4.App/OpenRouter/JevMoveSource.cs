@@ -17,15 +17,18 @@ public sealed class JevMoveSource : IMoveSource
 
     private readonly OpenRouterClient _client;
     private readonly ModelProfile.SystemOne _profile;
+    private readonly Random _random;
 
-    public JevMoveSource(OpenRouterClient client, ModelProfile.SystemOne profile)
+    public JevMoveSource(OpenRouterClient client, ModelProfile.SystemOne profile, Random? random = null)
     {
         _client = client;
         _profile = profile;
+        _random = random ?? Random.Shared;
     }
 
     public async Task<MoveReply> GetMoveAsync(Decision decision, CancellationToken cancellationToken)
     {
+        var assignment = OpaqueCriteria.Assign(decision, _random);
         var request = new SystemOneRequest(
             _profile.ModelId,
             new DecisionState(
@@ -36,20 +39,18 @@ public sealed class JevMoveSource : IMoveSource
                 DecisionPrompt.PriorFailure(decision)),
             new Dictionary<string, ChoiceQuestion>
             {
-                [QuestionName] = new ChoiceQuestion(
-                    DecisionPrompt.ChoiceInstructions(decision),
-                    decision.Criteria.ToDictionary(column => column.ToString(), column => DecisionPrompt.Criterion(decision, column))),
+                [QuestionName] = new ChoiceQuestion(DecisionPrompt.ChoiceInstructions(decision), assignment.Criteria),
             });
 
         return await _client.PostAsync(Path, request, cancellationToken) switch
         {
             CallOutcome.Failed failed => new MoveReply.Failed(failed.Failure),
-            CallOutcome.Body body => Parse(body.Json, decision),
+            CallOutcome.Body body => Parse(body.Json, decision, assignment.KeyToColumn),
             _ => throw new UnreachableException(),
         };
     }
 
-    private static MoveReply Parse(string body, Decision decision)
+    private static MoveReply Parse(string body, Decision decision, IReadOnlyDictionary<string, Column> keyToColumn)
     {
         ChoiceAnswer? answer;
         try
@@ -71,8 +72,9 @@ public sealed class JevMoveSource : IMoveSource
             return new MoveReply.Failed(new MoveFailure.Empty());
         }
 
-        return int.TryParse(answer.Choice.Trim(), out var value)
-            ? ColumnAnswer.Resolve(value, answer.Choice, decision, Reason(answer))
+        var key = answer.Choice.Trim();
+        return keyToColumn.TryGetValue(key, out var column)
+            ? ColumnAnswer.Resolve(column.Value, answer.Choice, decision, Reason(answer))
             : new MoveReply.Failed(new MoveFailure.Unparseable(answer.Choice));
     }
 
@@ -87,13 +89,50 @@ public sealed class JevMoveSource : IMoveSource
         if (answer.Probabilities is { } probabilities)
         {
             var ordered = probabilities
-                .OrderBy(pair => int.TryParse(pair.Key, out var key) ? key : int.MaxValue)
-                .ThenBy(pair => pair.Key, StringComparer.Ordinal)
+                .OrderBy(pair => pair.Key, StringComparer.Ordinal)
                 .Select(pair => $"{pair.Key}: {pair.Value.ToString(CultureInfo.InvariantCulture)}");
             parts.Add(string.Join(", ", ordered));
         }
 
         return parts.Count == 0 ? null : string.Join("; ", parts);
+    }
+
+    /// <summary>
+    /// Opaque Choice keys in shuffled insertion order so System One positional bias cannot agree on a column index.
+    /// Values stay <see cref="DecisionPrompt.Criterion"/> text with <c>[[COL:N]]</c> and win/block markers.
+    /// </summary>
+    internal static class OpaqueCriteria
+    {
+        public static Assignment Assign(Decision decision, Random random)
+        {
+            var columns = decision.Criteria.ToArray();
+            Shuffle(columns, random);
+
+            var criteria = new Dictionary<string, string>(columns.Length);
+            var keyToColumn = new Dictionary<string, Column>(columns.Length);
+            for (var index = 0; index < columns.Length; index++)
+            {
+                var key = $"opt_{(char)('a' + index)}";
+                var column = columns[index];
+                criteria[key] = DecisionPrompt.Criterion(decision, column);
+                keyToColumn[key] = column;
+            }
+
+            return new Assignment(criteria, keyToColumn);
+        }
+
+        private static void Shuffle(Column[] columns, Random random)
+        {
+            for (var index = columns.Length - 1; index > 0; index--)
+            {
+                var swap = random.Next(index + 1);
+                (columns[index], columns[swap]) = (columns[swap], columns[index]);
+            }
+        }
+
+        public sealed record Assignment(
+            Dictionary<string, string> Criteria,
+            Dictionary<string, Column> KeyToColumn);
     }
 
     private sealed record SystemOneRequest(string Model, DecisionState State, Dictionary<string, ChoiceQuestion> Questions);
