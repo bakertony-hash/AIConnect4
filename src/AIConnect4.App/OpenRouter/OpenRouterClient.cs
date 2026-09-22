@@ -1,13 +1,14 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using AIConnect4.Core;
 
 namespace AIConnect4.App.OpenRouter;
 
 /// <summary>
-/// One POST to OpenRouter with the transport failures already typed. Adapters send a request body and get back either
-/// the response body or a <see cref="MoveFailure"/> they return unchanged. External cancellation propagates as
-/// <see cref="OperationCanceledException"/> so the runner records Cancelled, not Timeout.
+/// One POST to OpenRouter with the transport failures already typed. External cancellation propagates as
+/// <see cref="OperationCanceledException"/>.
 /// </summary>
 public sealed class OpenRouterClient
 {
@@ -39,8 +40,38 @@ public sealed class OpenRouterClient
     /// <see cref="MoveFailure.Faulted"/> naming the status and the start of the response. Exceeding the per-call timeout
     /// returns <see cref="MoveFailure.Timeout"/>. A network fault returns <see cref="MoveFailure.Faulted"/>.
     /// </summary>
-    public Task<CallOutcome> PostAsync(string path, object body, CancellationToken cancellationToken) =>
-        throw new NotImplementedException();
+    public async Task<CallOutcome> PostAsync(string path, object body, CancellationToken cancellationToken)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(_timeout);
+        try
+        {
+            using var content = new StringContent(JsonSerializer.Serialize(body, body.GetType(), Json), Encoding.UTF8, "application/json");
+            using var response = await _http.PostAsync(path, content, timeoutCts.Token);
+            var text = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+            return response.IsSuccessStatusCode
+                ? new CallOutcome.Body(text)
+                : new CallOutcome.Failed(new MoveFailure.Faulted($"HTTP {(int)response.StatusCode} {response.StatusCode}: {Snippet(text)}"));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            return new CallOutcome.Failed(new MoveFailure.Timeout());
+        }
+        catch (HttpRequestException exception)
+        {
+            return new CallOutcome.Failed(new MoveFailure.Faulted(exception.Message));
+        }
+    }
+
+    internal static string Snippet(string text)
+    {
+        var collapsed = Regex.Replace(text, @"\s+", " ").Trim();
+        return collapsed.Length <= 200 ? collapsed : collapsed[..200];
+    }
 }
 
 public abstract record CallOutcome

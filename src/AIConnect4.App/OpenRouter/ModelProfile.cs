@@ -1,9 +1,6 @@
 namespace AIConnect4.App.OpenRouter;
 
-/// <summary>
-/// Which OpenRouter endpoint answers for a model and which knobs it accepts. A <see cref="SystemOne"/> profile has no
-/// effort or speed at all, so a Jev request cannot carry <c>reasoning.effort</c> or <c>provider.sort</c>.
-/// </summary>
+/// <summary>Which OpenRouter endpoint answers for a model and which knobs it accepts.</summary>
 public abstract record ModelProfile
 {
     private ModelProfile(string displayName, string modelId)
@@ -24,7 +21,7 @@ public abstract record ModelProfile
         : ModelProfile(DisplayName, ModelId);
 }
 
-/// <summary>How a chat model is asked to answer. Parsing accepts JSON first and a bare integer second whatever was requested.</summary>
+/// <summary>How a chat model is asked to answer.</summary>
 public enum AnswerFormat
 {
     /// <summary><c>response_format.json_schema</c> whose <c>column</c> enum is exactly the decision's criteria.</summary>

@@ -1,13 +1,13 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Text.Json;
 using AIConnect4.Core;
 
 namespace AIConnect4.App.OpenRouter;
 
 /// <summary>
-/// Asks a System One model one Choice question per call over <c>POST v1/systemone</c>. The request is
-/// <c>{ model, state, questions: { column: { type: "choice", instructions, criteria } } }</c> where <c>criteria</c>
-/// maps each legal column ("1" through "7") to a short description. The reply's <c>answers.column.choice</c> is the column.
-/// The profile type rules out <c>reasoning.effort</c> and <c>provider.sort</c>. Confidence and probabilities go into the
-/// reply's <see cref="MoveReply.Chosen.Reason"/> for the side panel.
+/// Asks a System One model one Choice question per call over <c>POST v1/systemone</c>. Confidence and probabilities go
+/// into the reply's <see cref="MoveReply.Chosen.Reason"/>.
 /// </summary>
 public sealed class JevMoveSource : IMoveSource
 {
@@ -24,12 +24,80 @@ public sealed class JevMoveSource : IMoveSource
         _profile = profile;
     }
 
-    public Task<MoveReply> GetMoveAsync(Decision decision, CancellationToken cancellationToken) =>
-        throw new NotImplementedException();
+    public async Task<MoveReply> GetMoveAsync(Decision decision, CancellationToken cancellationToken)
+    {
+        var request = new SystemOneRequest(
+            _profile.ModelId,
+            new DecisionState(
+                Decision.Rules,
+                DecisionPrompt.WhoYouAre(decision),
+                DecisionPrompt.Board(decision),
+                DecisionPrompt.LastMove(decision),
+                DecisionPrompt.PriorFailure(decision)),
+            new Dictionary<string, ChoiceQuestion>
+            {
+                [QuestionName] = new ChoiceQuestion(
+                    Decision.Question,
+                    decision.Criteria.ToDictionary(column => column.ToString(), column => $"Drop your disc in column {column}")),
+            });
+
+        return await _client.PostAsync(Path, request, cancellationToken) switch
+        {
+            CallOutcome.Failed failed => new MoveReply.Failed(failed.Failure),
+            CallOutcome.Body body => Parse(body.Json, decision),
+            _ => throw new UnreachableException(),
+        };
+    }
+
+    private static MoveReply Parse(string body, Decision decision)
+    {
+        ChoiceAnswer? answer;
+        try
+        {
+            answer = JsonSerializer.Deserialize<SystemOneResponse>(body, OpenRouterClient.Json)?.Answers?.GetValueOrDefault(QuestionName);
+        }
+        catch (JsonException)
+        {
+            answer = null;
+        }
+
+        if (answer is null)
+        {
+            return new MoveReply.Failed(new MoveFailure.Unparseable(OpenRouterClient.Snippet(body)));
+        }
+
+        if (string.IsNullOrWhiteSpace(answer.Choice))
+        {
+            return new MoveReply.Failed(new MoveFailure.Empty());
+        }
+
+        return int.TryParse(answer.Choice.Trim(), out var value)
+            ? ColumnAnswer.Resolve(value, answer.Choice, decision, Reason(answer))
+            : new MoveReply.Failed(new MoveFailure.Unparseable(answer.Choice));
+    }
+
+    private static string? Reason(ChoiceAnswer answer)
+    {
+        var parts = new List<string>(2);
+        if (answer.Confidence is { } confidence)
+        {
+            parts.Add($"confidence {confidence.ToString("0.00", CultureInfo.InvariantCulture)}");
+        }
+
+        if (answer.Probabilities is { } probabilities)
+        {
+            var ordered = probabilities
+                .OrderBy(pair => int.TryParse(pair.Key, out var key) ? key : int.MaxValue)
+                .ThenBy(pair => pair.Key, StringComparer.Ordinal)
+                .Select(pair => $"{pair.Key}: {pair.Value.ToString(CultureInfo.InvariantCulture)}");
+            parts.Add(string.Join(", ", ordered));
+        }
+
+        return parts.Count == 0 ? null : string.Join("; ", parts);
+    }
 
     private sealed record SystemOneRequest(string Model, DecisionState State, Dictionary<string, ChoiceQuestion> Questions);
 
-    /// <summary>The shared decision payload as an object, not prose. Snake_case on the wire.</summary>
     private sealed record DecisionState(string Rules, string YouAre, string Board, string? LastMove, string? PreviousAttempt);
 
     private sealed record ChoiceQuestion(string Instructions, Dictionary<string, string> Criteria)

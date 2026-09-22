@@ -26,10 +26,7 @@ public static class ModelCatalog
 
     public static ModelProfile DefaultYellow => Luna;
 
-    /// <summary>
-    /// The profile for a model id typed into the Custom row. Any <c>typesafe/</c> or <c>~typesafe/</c> id is System One.
-    /// Every other id is a chat model that shows effort and speed and is asked for a bare column number.
-    /// </summary>
+    /// <summary>The profile for a model id typed into the Custom row.</summary>
     public static ModelProfile Custom(string modelId)
     {
         var id = modelId.Trim();
