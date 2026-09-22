@@ -30,11 +30,11 @@ public class JevMoveSourceTests
         Assert.Equal("typesafe/jev-1.13", body.GetProperty("model").GetString());
         var column = body.GetProperty("questions").GetProperty("column");
         Assert.Equal("choice", column.GetProperty("type").GetString());
-        Assert.Equal("Which legal column should you play?", column.GetProperty("instructions").GetString());
         Assert.Equal(["2", "3", "4", "5", "6", "7"], column.GetProperty("criteria").EnumerateObject().Select(property => property.Name));
         Assert.Equal(
             "Column 2 is empty. A disc drops to row 0.",
             column.GetProperty("criteria").GetProperty("2").GetString());
+        Assert.StartsWith("Which legal column should you play?", column.GetProperty("instructions").GetString());
         Assert.Contains("state.board", column.GetProperty("instructions").GetString());
         var state = body.GetProperty("state");
         Assert.Equal(Decision.Rules, state.GetProperty("rules").GetString());
