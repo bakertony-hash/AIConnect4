@@ -2,10 +2,7 @@ using System.Collections.Immutable;
 
 namespace AIConnect4.Core;
 
-/// <summary>
-/// The only thing a model is asked. One Choice question over the current board, with
-/// <see cref="Criteria"/> equal to <see cref="Board.LegalColumns"/>. Both Jev and chat adapters consume this type.
-/// </summary>
+/// <summary>The one question a model is asked per call.</summary>
 public sealed record Decision
 {
     public const string Question = "Which legal column should you play?";
@@ -38,7 +35,10 @@ public sealed record Decision
     public string Grid => Board.Render();
 
     /// <summary>Builds the decision for <paramref name="toMove"/>. Throws when the board already has a <see cref="Board.Result"/>.</summary>
-    public static Decision For(Board board, Player toMove) => throw new NotImplementedException();
+    public static Decision For(Board board, Player toMove) =>
+        board.Result is null
+            ? new Decision(board, toMove, priorFailure: null)
+            : throw new InvalidOperationException("The game already has a result, so there is no column to choose.");
 
     public Decision Retry(MoveFailure failure) => new(Board, YouAre, failure);
 

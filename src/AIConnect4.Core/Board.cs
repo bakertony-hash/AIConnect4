@@ -8,6 +8,8 @@ public sealed class Board
     public const int Rows = 6;
     public const int Columns = Column.Count;
 
+    private static readonly (int RowStep, int ColumnStep)[] Directions = [(0, 1), (1, 0), (1, 1), (1, -1)];
+
     private readonly Player?[] _cells;
 
     private Board(Player?[] cells, PlacedDisc? lastMove, GameResult? result)
@@ -26,18 +28,73 @@ public sealed class Board
 
     public int DiscCount => _cells.Count(cell => cell is not null);
 
-    public Player? this[BoardPosition position] => _cells[CellIndex(position.Row, position.Column)];
+    public Player? this[BoardPosition position] => _cells[CellIndex(position)];
 
     public Player? Cell(int row, Column column) => _cells[CellIndex(row, column)];
 
     /// <summary>Columns 1 through 7, left to right, that still accept a disc. Empty once the game has a result.</summary>
-    public ImmutableArray<Column> LegalColumns() => throw new NotImplementedException();
+    public ImmutableArray<Column> LegalColumns() =>
+        Result is null ? [.. Column.All.Where(column => Cell(Rows - 1, column) is null)] : [];
 
     /// <summary>The board after <paramref name="player"/> drops into <paramref name="column"/>, or null when the column is not legal.</summary>
-    public Board? Drop(Player player, Column column) => throw new NotImplementedException();
+    public Board? Drop(Player player, Column column)
+    {
+        if (!LegalColumns().Contains(column))
+        {
+            return null;
+        }
+
+        var row = Enumerable.Range(0, Rows).First(candidate => Cell(candidate, column) is null);
+        var cells = _cells.ToArray();
+        cells[CellIndex(row, column)] = player;
+        var disc = new PlacedDisc(player, new BoardPosition(row, column));
+        GameResult? result = WinningLineThrough(cells, disc) is { } line ? new GameResult.Win(player, line)
+            : cells.Contains(null) ? null
+            : new GameResult.Draw();
+        return new Board(cells, disc, result);
+    }
 
     /// <summary>Six lines of seven characters, top row first, using 'R', 'Y', and '.'.</summary>
-    public string Render() => throw new NotImplementedException();
+    public string Render() =>
+        string.Join('\n', Enumerable.Range(0, Rows).Reverse().Select(row =>
+            string.Concat(Column.All.Select(column => Cell(row, column)?.Disc() ?? '.'))));
+
+    private static WinningLine? WinningLineThrough(Player?[] cells, PlacedDisc disc)
+    {
+        foreach (var (rowStep, columnStep) in Directions)
+        {
+            var behind = Run(cells, disc, -rowStep, -columnStep).Reverse().ToList();
+            var run = behind.Append(disc.Position).Concat(Run(cells, disc, rowStep, columnStep)).ToList();
+            if (run.Count >= 4)
+            {
+                var lastWindowStartHoldingDisc = Math.Min(behind.Count, run.Count - 4);
+                var line = run.Skip(lastWindowStartHoldingDisc).Take(4).ToList();
+                return new WinningLine(line[0], line[1], line[2], line[3]);
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<BoardPosition> Run(Player?[] cells, PlacedDisc disc, int rowStep, int columnStep)
+    {
+        var next = Step(disc.Position, rowStep, columnStep);
+        while (next is { } position && cells[CellIndex(position)] == disc.Player)
+        {
+            yield return position;
+            next = Step(position, rowStep, columnStep);
+        }
+    }
+
+    private static BoardPosition? Step(BoardPosition from, int rowStep, int columnStep)
+    {
+        var row = from.Row + rowStep;
+        return row is >= 0 and < Rows && Column.TryFrom(from.Column.Value + columnStep) is { } column
+            ? new BoardPosition(row, column)
+            : null;
+    }
+
+    private static int CellIndex(BoardPosition position) => CellIndex(position.Row, position.Column);
 
     private static int CellIndex(int row, Column column) => row * Columns + column.Index;
 }

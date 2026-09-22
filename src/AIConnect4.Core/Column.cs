@@ -2,12 +2,11 @@ using System.Collections.Immutable;
 
 namespace AIConnect4.Core;
 
-/// <summary>One of the seven board columns. <see cref="Value"/> is 1 through 7 and <see cref="Index"/> is <c>Value - 1</c>.</summary>
+/// <summary>One of the seven board columns. <see cref="Value"/> is 1 through 7, <see cref="Index"/> is <c>Value - 1</c>, and the default value is column 1.</summary>
 public readonly record struct Column : IComparable<Column>
 {
     public const int Count = 7;
 
-    // Stores the index so the default struct value is column 1 rather than an unrepresentable column 0.
     private readonly int _index;
 
     private Column(int index) => _index = index;

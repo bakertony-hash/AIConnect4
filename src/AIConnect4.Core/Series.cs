@@ -5,7 +5,6 @@ namespace AIConnect4.Core;
 /// <summary>How many games a series plays. <see cref="GameCount"/> is at least 1. The default is 1.</summary>
 public readonly record struct SeriesConfig
 {
-    // Stores GameCount - 1 so the default struct value is a series of one game rather than zero.
     private readonly int _extraGames;
 
     private SeriesConfig(int extraGames) => _extraGames = extraGames;
@@ -62,10 +61,18 @@ public abstract record SeriesStatus
     /// <param name="GameNumber">1-based index of the live game.</param>
     public sealed record Running(int GameNumber) : SeriesStatus;
 
+    /// <param name="GameNumber">1-based index of the live game, or of the next game when paused between games.</param>
     public sealed record Paused(int GameNumber) : SeriesStatus;
 
-    public sealed record Finished : SeriesStatus;
+    public abstract record Ended : SeriesStatus
+    {
+        private protected Ended()
+        {
+        }
+    }
 
-    /// <param name="GameNumber">1-based index of the game that aborted. That game did not score.</param>
-    public sealed record Aborted(int GameNumber, AbortReason Reason) : SeriesStatus;
+    public sealed record Finished : Ended;
+
+    /// <param name="GameNumber">1-based index of the game that aborted, or of the next game when cancelled between games. That game did not score.</param>
+    public sealed record Aborted(int GameNumber, AbortReason Reason) : Ended;
 }

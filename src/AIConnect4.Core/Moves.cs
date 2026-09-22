@@ -2,7 +2,6 @@ using System.Diagnostics;
 
 namespace AIConnect4.Core;
 
-/// <summary>A model that answers one <see cref="Decision"/> per call. Adapters close over their <c>ModelProfile</c>.</summary>
 public interface IMoveSource
 {
     Task<MoveReply> GetMoveAsync(Decision decision, CancellationToken cancellationToken);
@@ -25,18 +24,14 @@ public abstract record MoveFailure
     {
     }
 
-    /// <summary>The model answered with no column.</summary>
     public sealed record Empty : MoveFailure;
 
-    /// <summary>The answer held no column in 1 through 7.</summary>
     public sealed record Unparseable(string Answer) : MoveFailure;
 
-    /// <summary>The runner found the chosen column outside <see cref="Decision.Criteria"/>.</summary>
     public sealed record IllegalColumn(Column Column) : MoveFailure;
 
     public sealed record Timeout : MoveFailure;
 
-    /// <summary>The call itself failed, such as a transport error or an exception from the adapter.</summary>
     public sealed record Faulted(string Message) : MoveFailure;
 
     /// <summary>One sentence an adapter can place in the retry prompt.</summary>

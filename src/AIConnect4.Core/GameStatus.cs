@@ -12,7 +12,6 @@ public abstract record GameStatus
 
     public sealed record Paused : GameStatus;
 
-    /// <summary>A terminal status. <see cref="GameRunner.PlayAsync"/> returns one.</summary>
     public abstract record Ended : GameStatus
     {
         private protected Ended()

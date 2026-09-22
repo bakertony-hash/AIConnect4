@@ -2,7 +2,7 @@ namespace AIConnect4.Core;
 
 /// <summary>
 /// The runners' clocks. <see cref="Time"/> measures model calls. <see cref="WatchPause"/> runs between applied
-/// moves and between games, is UI pacing, and is never measured. Tests advance a fake <see cref="Time"/> inside it.
+/// moves and between games, is UI pacing, and is never measured.
 /// </summary>
 public sealed record MatchPacing(TimeProvider Time, Func<CancellationToken, Task> WatchPause)
 {
