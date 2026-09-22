@@ -69,7 +69,9 @@ public class JevMoveSourceTests
         var state = body.GetProperty("state");
         Assert.Equal(Decision.Rules, state.GetProperty("rules").GetString());
         Assert.Equal("You are Red (R). It is your move.", state.GetProperty("you_are").GetString());
-        Assert.Equal("Yellow played column 1.", state.GetProperty("last_move").GetString());
+        Assert.Equal("Yellow played.", state.GetProperty("last_move").GetString());
+        Assert.Contains("state.board", column.GetProperty("instructions").GetString());
+        Assert.DoesNotContain("last_move", column.GetProperty("instructions").GetString());
         Assert.StartsWith("Board, top row first. R = Red, Y = Yellow, . = empty.\nY......\nR......", state.GetProperty("board").GetString());
         Assert.False(body.TryGetProperty("reasoning", out _));
         Assert.False(body.TryGetProperty("provider", out _));
@@ -101,14 +103,18 @@ public class JevMoveSourceTests
     public async Task Criteria_use_SystemOne_stack_facts_and_win_block_without_digit_column_markers()
     {
         var stackDecision = Decision.For(Games.Play(4, 4, 4), Player.Yellow);
-        var stackAssignment = JevMoveSource.OpaqueCriteria.Assign(stackDecision, new Random(3));
-        var (_, stackBody) = await Ask(stackDecision, Choosing("opt_a"), new Random(3));
-        var stackCriteria = stackBody.GetProperty("questions").GetProperty("column").GetProperty("criteria");
-        var keyForFour = stackAssignment.KeyToColumn.Single(pair => pair.Value.Value == 4).Key;
-        var keyForOne = stackAssignment.KeyToColumn.Single(pair => pair.Value.Value == 1).Key;
+        Assert.Equal(Column.From(4), stackDecision.LastMove!.Value.Position.Column);
         Assert.Equal(
             "3 disc(s) from the bottom: R-Y-R. Next disc lands on row 3.",
-            stackCriteria.GetProperty(keyForFour).GetString());
+            DecisionPrompt.CriterionForSystemOne(stackDecision, Column.From(4)));
+        Assert.Equal(
+            "Empty. A disc drops to row 0.",
+            DecisionPrompt.CriterionForSystemOne(stackDecision, Column.From(1)));
+        var stackAssignment = JevMoveSource.OpaqueCriteria.Assign(stackDecision, new Random(3));
+        Assert.DoesNotContain(4, stackAssignment.KeyToColumn.Values.Select(column => column.Value));
+        var (_, stackBody) = await Ask(stackDecision, Choosing("opt_a"), new Random(3));
+        var stackCriteria = stackBody.GetProperty("questions").GetProperty("column").GetProperty("criteria");
+        var keyForOne = stackAssignment.KeyToColumn.Single(pair => pair.Value.Value == 1).Key;
         Assert.Equal(
             "Empty. A disc drops to row 0.",
             stackCriteria.GetProperty(keyForOne).GetString());

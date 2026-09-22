@@ -12,9 +12,15 @@ public static class DecisionPrompt
     /// <summary>A legend line followed by <see cref="Decision.Grid"/>. Top row printed first, 'R', 'Y', '.'.</summary>
     public static string Board(Decision decision) => "Board, top row first. R = Red, Y = Yellow, . = empty.\n" + decision.Grid;
 
-    /// <summary>"Yellow played column 4." Null when the board is empty.</summary>
+    /// <summary>"Yellow played column 4." Null when the board is empty. Chat path only.</summary>
     public static string? LastMove(Decision decision) =>
         decision.LastMove is { } move ? $"{move.Player} played column {move.Position.Column}." : null;
+
+    /// <summary>
+    /// System One state only: who moved, without the column number, so last_move cannot name a Choice target.
+    /// </summary>
+    public static string? LastMoveForSystemOne(Decision decision) =>
+        decision.LastMove is { } move ? $"{move.Player} played." : null;
 
     /// <summary>"Legal columns: 2, 3, 4, 5, 6, 7." from <see cref="Decision.Criteria"/>, in order.</summary>
     public static string LegalColumns(Decision decision) => $"Legal columns: {string.Join(", ", decision.Criteria)}.";
@@ -74,7 +80,7 @@ public static class DecisionPrompt
 
     /// <summary>System One Choice instructions: the shared question plus where to read the board in <c>state</c>.</summary>
     public static string ChoiceInstructions(Decision decision) =>
-        $"{Decision.Question} Read state.board (top row first, R/Y/.) and state.last_move. " +
+        $"{Decision.Question} Read state.board (top row first, R/Y/.). " +
         $"You are {decision.YouAre.Disc()}. Each criterion describes one legal drop's stack and any host win or block marker.";
 
     /// <summary>One chat reminder after the legal list. Still one column decision.</summary>

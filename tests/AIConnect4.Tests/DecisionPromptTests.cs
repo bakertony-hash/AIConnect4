@@ -106,7 +106,18 @@ public class DecisionPromptTests
 
         Assert.DoesNotContain("centre", DecisionPrompt.ChoiceInstructions(decision), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("center", DecisionPrompt.ChoiceInstructions(decision), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("last_move", DecisionPrompt.ChoiceInstructions(decision));
         Assert.DoesNotContain("centre", DecisionPrompt.PlayReminder(decision), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("center", DecisionPrompt.PlayReminder(decision), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SystemOne_last_move_omits_column_number_while_chat_keeps_it()
+    {
+        var decision = Decision.For(Games.Play(4), Player.Yellow);
+
+        Assert.Equal("Red played.", DecisionPrompt.LastMoveForSystemOne(decision));
+        Assert.Equal("Red played column 4.", DecisionPrompt.LastMove(decision));
+        Assert.Null(DecisionPrompt.LastMoveForSystemOne(Decision.For(Board.Empty, Player.Red)));
     }
 }
