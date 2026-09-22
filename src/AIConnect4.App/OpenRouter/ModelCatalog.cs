@@ -10,16 +10,16 @@ public static class ModelCatalog
     public static ModelProfile.SystemOne JevLatest { get; } = new("Jev Latest", "~typesafe/jev-latest");
 
     public static ModelProfile.Chat Luna { get; } =
-        new("Luna", "openai/gpt-5.6-luna", SupportsEffort: true, SupportsSpeed: true, AnswerFormat.JsonSchema);
+        new("GPT-5.6 Luna", "openai/gpt-5.6-luna", SupportsEffort: true, SupportsSpeed: true, AnswerFormat.JsonSchema);
 
     public static ImmutableArray<ModelProfile> Curated { get; } =
     [
         Jev,
         JevLatest,
         Luna,
-        new ModelProfile.Chat("GPT-5.6 Sol", "openai/gpt-5.6-sol", SupportsEffort: true, SupportsSpeed: true, AnswerFormat.JsonSchema),
-        new ModelProfile.Chat("Claude Opus 5", "anthropic/claude-opus-5", SupportsEffort: true, SupportsSpeed: true, AnswerFormat.JsonSchema),
-        new ModelProfile.Chat("GPT-5.6 Terra", "openai/gpt-5.6-terra", SupportsEffort: true, SupportsSpeed: true, AnswerFormat.JsonSchema),
+        new ModelProfile.Chat("GPT-6 Luna", "openai/gpt-6-luna", SupportsEffort: true, SupportsSpeed: true, AnswerFormat.JsonSchema),
+        new ModelProfile.Chat("GPT-6 Sol", "openai/gpt-6-sol", SupportsEffort: true, SupportsSpeed: true, AnswerFormat.JsonSchema),
+        new ModelProfile.Chat("GPT-6 Astra", "openai/gpt-6-astra", SupportsEffort: true, SupportsSpeed: true, AnswerFormat.JsonSchema),
     ];
 
     public static ModelProfile DefaultRed => Jev;
