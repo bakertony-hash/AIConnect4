@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using Avalonia.Threading;
@@ -253,22 +252,22 @@ public sealed class ArenaViewModel : INotifyPropertyChanged, IDisposable
         }
 
         var side = game.Thinking == Player.Red ? Red : Yellow;
-        side.ThinkingText = FormatDuration(game.ElapsedThinking);
+        side.ThinkingText = DecisionTimeFormat.Format(game.ElapsedThinking);
     }
 
     private static void MirrorSide(SideViewModel side, Player player, SeriesRunner series)
     {
-        side.TotalDecisionText = FormatDuration(series.TotalDecisionTime(player));
+        side.TotalDecisionText = DecisionTimeFormat.Format(series.TotalDecisionTime(player));
         if (series.CurrentGame is { } game)
         {
             side.LastDecisionText = game.LastDecisionTime(player) is { } last
-                ? FormatDuration(last)
+                ? DecisionTimeFormat.Format(last)
                 : "—";
             var move = game.Moves.LastOrDefault(m => m.Player == player);
             side.LastAnswerText = move is null ? "—" : $"Column {move.Column} ({move.Origin})";
             if (game.Thinking == player)
             {
-                side.ThinkingText = FormatDuration(game.ElapsedThinking);
+                side.ThinkingText = DecisionTimeFormat.Format(game.ElapsedThinking);
             }
             else if (game.Thinking is null)
             {
@@ -356,11 +355,6 @@ public sealed class ArenaViewModel : INotifyPropertyChanged, IDisposable
         AbortReason.MoveRejected rejected => $"{rejected.Side} move rejected: {rejected.Failure.Describe()}",
         _ => throw new UnreachableException(),
     };
-
-    private static string FormatDuration(TimeSpan span) =>
-        span.TotalSeconds < 10
-            ? span.TotalSeconds.ToString("0.00", CultureInfo.InvariantCulture) + " s"
-            : span.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " s";
 
     private void CancelPlay()
     {
