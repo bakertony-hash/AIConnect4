@@ -32,7 +32,7 @@ public class JevMoveSourceTests
         Assert.Equal("choice", column.GetProperty("type").GetString());
         Assert.Equal(["2", "3", "4", "5", "6", "7"], column.GetProperty("criteria").EnumerateObject().Select(property => property.Name));
         Assert.Equal(
-            "Column 2 is empty. A disc drops to row 0.",
+            "[[COL:2]] Column 2 is empty. A disc drops to row 0.",
             column.GetProperty("criteria").GetProperty("2").GetString());
         Assert.StartsWith("Which legal column should you play?", column.GetProperty("instructions").GetString());
         Assert.Contains("state.board", column.GetProperty("instructions").GetString());
@@ -54,10 +54,10 @@ public class JevMoveSourceTests
 
         var criteria = body.GetProperty("questions").GetProperty("column").GetProperty("criteria");
         Assert.Equal(
-            "Column 4 has 3 disc(s) from the bottom: R-Y-R. Next disc lands on row 3.",
+            "[[COL:4]] Column 4 has 3 disc(s) from the bottom: R-Y-R. Next disc lands on row 3.",
             criteria.GetProperty("4").GetString());
         Assert.Equal(
-            "Column 1 is empty. A disc drops to row 0.",
+            "[[COL:1]] Column 1 is empty. A disc drops to row 0.",
             criteria.GetProperty("1").GetString());
     }
 
