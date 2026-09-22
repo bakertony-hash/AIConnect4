@@ -3,6 +3,7 @@
   <PropertyGroup>
     <RootNamespace>AIConnect4.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
+    <RollForward>LatestMajor</RollForward>
   </PropertyGroup>
 
   <ItemGroup>
