@@ -1,0 +1,7 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AIConnect4.Core</RootNamespace>
+  </PropertyGroup>
+
+</Project>
