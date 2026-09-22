@@ -99,7 +99,6 @@ public sealed class JevMoveSource : IMoveSource
 
     /// <summary>
     /// Opaque Choice keys in shuffled insertion order so System One positional bias cannot agree on a column index.
-    /// Values stay <see cref="DecisionPrompt.Criterion"/> text with <c>[[COL:N]]</c> and win/block markers.
     /// </summary>
     internal static class OpaqueCriteria
     {
