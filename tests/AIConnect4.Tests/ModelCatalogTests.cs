@@ -8,6 +8,7 @@ public class ModelCatalogTests
         Assert.Equal("typesafe/jev-1.13", ModelCatalog.DefaultRed.ModelId);
         Assert.IsType<ModelProfile.SystemOne>(ModelCatalog.DefaultRed);
         Assert.Equal("openai/gpt-5.6-luna", ModelCatalog.DefaultYellow.ModelId);
+        Assert.Equal("GPT-5.6 Luna", ModelCatalog.DefaultYellow.DisplayName);
         Assert.IsType<ModelProfile.Chat>(ModelCatalog.DefaultYellow);
     }
 
@@ -19,9 +20,19 @@ public class ModelCatalogTests
         Assert.IsType<ModelProfile.SystemOne>(byId["typesafe/jev-1.13"]);
         Assert.IsType<ModelProfile.SystemOne>(byId["~typesafe/jev-latest"]);
         var luna = Assert.IsType<ModelProfile.Chat>(byId["openai/gpt-5.6-luna"]);
+        Assert.Equal("GPT-5.6 Luna", luna.DisplayName);
         Assert.True(luna.SupportsEffort);
         Assert.True(luna.SupportsSpeed);
         Assert.Equal(AnswerFormat.JsonSchema, luna.AnswerFormat);
+
+        var gpt6Luna = Assert.IsType<ModelProfile.Chat>(byId["openai/gpt-6-luna"]);
+        Assert.Equal("GPT-6 Luna", gpt6Luna.DisplayName);
+        Assert.True(gpt6Luna.SupportsEffort);
+        Assert.True(gpt6Luna.SupportsSpeed);
+        Assert.Equal(AnswerFormat.JsonSchema, gpt6Luna.AnswerFormat);
+
+        Assert.Equal("GPT-6 Sol", byId["openai/gpt-6-sol"].DisplayName);
+        Assert.Equal("GPT-6 Astra", byId["openai/gpt-6-astra"].DisplayName);
     }
 
     [Fact]
@@ -45,7 +56,7 @@ public class ModelCatalogTests
     }
 
     [Theory]
-    [InlineData("openai/gpt-5.6-sol")]
+    [InlineData("openai/gpt-6-sol")]
     [InlineData("mistralai/mistral-large")]
     [InlineData("nottypesafe/jev-1.13")]
     public void Custom_other_ids_are_chat_with_effort_and_speed_and_a_bare_number_answer(string modelId)
