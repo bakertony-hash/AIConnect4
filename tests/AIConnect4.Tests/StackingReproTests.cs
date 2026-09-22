@@ -2,9 +2,6 @@ using System.Text.Json;
 
 namespace AIConnect4.Tests;
 
-/// <summary>
-/// Documents Choice-key bias after opaque shuffle. Last-key and middle-key models no longer share a stable column.
-/// </summary>
 public class StackingReproTests
 {
     private static readonly ChatTuning Tuning = ChatTuning.Omit;
