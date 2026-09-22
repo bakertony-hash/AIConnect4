@@ -21,8 +21,13 @@ public sealed class ArenaViewModel : INotifyPropertyChanged, IDisposable
     private readonly HttpClient? _http;
     private readonly OpenRouterClient? _client;
     private readonly DispatcherTimer _thinkingTimer;
+    private readonly SessionModelDecisionTotals _sessionModelTotals = new();
     private SeriesRunner? _runner;
     private CancellationTokenSource? _playCts;
+    private ModelProfile? _playingRed;
+    private ModelProfile? _playingYellow;
+    private GameRunner? _timingGame;
+    private int _timingCount;
     private int _gameCount = 1;
     private int _draws;
     private string _statusText;
@@ -54,6 +59,8 @@ public sealed class ArenaViewModel : INotifyPropertyChanged, IDisposable
             cell.Apply(disc: null, lastMove: false, winning: false);
         }
 
+        SessionModelTotals = new ObservableCollection<ModelDecisionTotalRow>();
+
         PlayCommand = new RelayCommand(Play, () => CanPlay);
         PauseCommand = new RelayCommand(Pause, () => CanPause);
         ResumeCommand = new RelayCommand(Resume, () => CanResume);
@@ -73,6 +80,9 @@ public sealed class ArenaViewModel : INotifyPropertyChanged, IDisposable
     public SideViewModel Yellow { get; }
 
     public ObservableCollection<BoardCellViewModel> Cells { get; }
+
+    /// <summary>Cumulative decision time per model for this app session. Not cleared by New Series.</summary>
+    public ObservableCollection<ModelDecisionTotalRow> SessionModelTotals { get; }
 
     public int GameCount
     {
@@ -179,6 +189,10 @@ public sealed class ArenaViewModel : INotifyPropertyChanged, IDisposable
         var pacing = new MatchPacing(TimeProvider.System, ct => Task.Delay(WatchPause, ct));
 
         DetachRunner();
+        _playingRed = redProfile;
+        _playingYellow = yellowProfile;
+        _timingGame = null;
+        _timingCount = 0;
         _runner = new SeriesRunner(red, yellow, config, pacing);
         _runner.Changed += OnRunnerChanged;
         SettingsEnabled = false;
@@ -216,6 +230,10 @@ public sealed class ArenaViewModel : INotifyPropertyChanged, IDisposable
     {
         CancelPlay();
         DetachRunner();
+        _playingRed = null;
+        _playingYellow = null;
+        _timingGame = null;
+        _timingCount = 0;
         Red.ResetSeriesDisplay();
         Yellow.ResetSeriesDisplay();
         Draws = 0;
@@ -241,7 +259,57 @@ public sealed class ArenaViewModel : INotifyPropertyChanged, IDisposable
         MirrorBoard(_runner.CurrentGame);
         MirrorSide(Red, Player.Red, _runner);
         MirrorSide(Yellow, Player.Yellow, _runner);
+        IngestNewDecisionTimings();
         RaiseCommands();
+    }
+
+    private void IngestNewDecisionTimings()
+    {
+        if (_runner?.CurrentGame is not { } game || _playingRed is null || _playingYellow is null)
+        {
+            return;
+        }
+
+        if (!ReferenceEquals(game, _timingGame))
+        {
+            _timingGame = game;
+            _timingCount = 0;
+        }
+
+        var timings = game.Timings;
+        var added = false;
+        while (_timingCount < timings.Count)
+        {
+            var timing = timings[_timingCount++];
+            var profile = timing.Player == Player.Red ? _playingRed : _playingYellow;
+            _sessionModelTotals.Add(profile.ModelId, profile.DisplayName, timing.Duration);
+            added = true;
+        }
+
+        if (added)
+        {
+            SyncSessionModelTotalsUi();
+        }
+    }
+
+    private void SyncSessionModelTotalsUi()
+    {
+        var snapshot = _sessionModelTotals.Snapshot();
+        var byId = SessionModelTotals.ToDictionary(row => row.ModelId, StringComparer.Ordinal);
+        SessionModelTotals.Clear();
+        foreach (var entry in snapshot)
+        {
+            var totalText = DecisionTimeFormat.Format(entry.Total);
+            if (byId.TryGetValue(entry.ModelId, out var existing))
+            {
+                existing.Update(entry.DisplayName, totalText);
+                SessionModelTotals.Add(existing);
+            }
+            else
+            {
+                SessionModelTotals.Add(new ModelDecisionTotalRow(entry.ModelId, entry.DisplayName, totalText));
+            }
+        }
     }
 
     private void RefreshThinking()
