@@ -20,8 +20,8 @@ public static class DecisionPrompt
     public static string LegalColumns(Decision decision) => $"Legal columns: {string.Join(", ", decision.Criteria)}.";
 
     /// <summary>
-    /// One Choice option boundary for <paramref name="column"/>: empty or the bottom-up disc stack and landing row.
-    /// Host-owned facts so a System One model need not count the grid.
+    /// One Choice option boundary for <paramref name="column"/>: unique column token, stack facts, and one-ply win/block.
+    /// Host-owned so a System One model need not count the grid or invent tactics from soft instructions.
     /// </summary>
     public static string Criterion(Decision decision, Column column)
     {
@@ -36,19 +36,37 @@ public static class DecisionPrompt
             discs.Add(player.Disc());
         }
 
-        return discs.Count == 0
+        var stack = discs.Count == 0
             ? $"Column {column} is empty. A disc drops to row 0."
             : $"Column {column} has {discs.Count} disc(s) from the bottom: {string.Join('-', discs)}. Next disc lands on row {discs.Count}.";
+
+        return $"[[COL:{column}]] {stack}{TacticSuffix(decision, column)}";
+    }
+
+    /// <summary>One-ply win, else one-ply block, else empty. Uses <see cref="Board.Drop"/> only.</summary>
+    private static string TacticSuffix(Decision decision, Column column)
+    {
+        if (decision.Board.Drop(decision.YouAre, column)?.Result is GameResult.Win)
+        {
+            return " Playing here wins immediately.";
+        }
+
+        if (decision.Board.Drop(decision.YouAre.Opponent(), column)?.Result is GameResult.Win)
+        {
+            return " Playing here blocks an immediate opponent win.";
+        }
+
+        return "";
     }
 
     /// <summary>System One Choice instructions: the shared question plus where to read the board in <c>state</c>.</summary>
     public static string ChoiceInstructions(Decision decision) =>
         $"{Decision.Question} Read state.board (top row first, R/Y/.) and state.last_move. " +
-        $"You are {decision.YouAre.Disc()}. Win if you can, otherwise block an immediate opponent four, otherwise prefer centre columns.";
+        $"You are {decision.YouAre.Disc()}. Each criterion names its column, stack, and any host win or block marker.";
 
     /// <summary>One chat reminder after the legal list. Still one column decision.</summary>
     public static string PlayReminder(Decision decision) =>
-        $"Study the board grid above. You are {decision.YouAre.Disc()}. Win if you can, otherwise block an immediate opponent four, otherwise prefer centre columns.";
+        $"Study the board grid above. You are {decision.YouAre.Disc()}. Pick one legal column.";
 
     /// <summary><see cref="MoveFailure.Describe"/> of <see cref="Decision.PriorFailure"/>. Null on a first attempt.</summary>
     public static string? PriorFailure(Decision decision) => decision.PriorFailure?.Describe();

@@ -15,7 +15,13 @@ public readonly record struct Column : IComparable<Column>
 
     public int Index => _index;
 
-    public static ImmutableArray<Column> All { get; } = [.. Enumerable.Range(0, Count).Select(index => new Column(index))];
+    public static ImmutableArray<Column> All => Columns.All;
+
+    private static class Columns
+    {
+        public static readonly ImmutableArray<Column> All =
+            ImmutableArray.CreateRange(Enumerable.Range(0, Count).Select(index => new Column(index)));
+    }
 
     public static Column? TryFrom(int value) => value is >= 1 and <= Count ? new Column(value - 1) : null;
 
