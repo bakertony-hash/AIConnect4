@@ -3,27 +3,27 @@ using System.Text.Json;
 namespace AIConnect4.Tests;
 
 /// <summary>
-/// Reproduces the reported stacking pattern when both sides always answer with the last
-/// legal column from the request (last System One criteria key / last chat schema enum).
+/// Documents Choice-key bias after opaque shuffle. Last-key and middle-key models no longer share a stable column.
 /// </summary>
 public class StackingReproTests
 {
     private static readonly ChatTuning Tuning = ChatTuning.Omit;
 
     [Fact]
-    public async Task Always_last_legal_stacks_column_7_then_moves_left()
+    public async Task Always_last_opaque_key_does_not_stack_a_single_column()
     {
-        var handler = FakeHandler.FromRequest(LastLegalReply);
+        var handler = FakeHandler.FromRequest(LastOpaqueKeyReply);
         var client = FakeHandler.Client(handler);
         var runner = new GameRunner(
-            new JevMoveSource(client, ModelCatalog.Jev),
+            new JevMoveSource(client, ModelCatalog.Jev, new Random(21)),
             new ChatMoveSource(client, ModelCatalog.Luna, Tuning));
 
         var ended = await runner.PlayAsync(CancellationToken.None);
 
         var columns = runner.Moves.Select(move => move.Column.Value).ToArray();
         Assert.True(columns.Length >= 7, $"moves: [{string.Join(',', columns)}]");
-        Assert.Equal([7, 7, 7, 7, 7, 7, 6], columns.Take(7).ToArray());
+        Assert.NotEqual([7, 7, 7, 7, 7, 7, 6], columns.Take(7).ToArray());
+        Assert.True(columns.Take(6).Distinct().Count() > 1, $"first six stacked: [{string.Join(',', columns.Take(6))}]");
 
         var firstBoard = BoardText(handler.Requests[0].Body);
         var laterBoard = BoardText(handler.Requests[3].Body);
@@ -36,27 +36,29 @@ public class StackingReproTests
     }
 
     [Fact]
-    public async Task Last_legal_reply_tracks_shrinking_criteria_not_a_host_fallback()
+    public async Task Last_opaque_key_resolves_through_the_request_map()
     {
-        var handler = FakeHandler.FromRequest(LastLegalReply);
-        var source = new JevMoveSource(FakeHandler.Client(handler), ModelCatalog.Jev);
+        var handler = FakeHandler.FromRequest(LastOpaqueKeyReply);
+        var source = new JevMoveSource(FakeHandler.Client(handler), ModelCatalog.Jev, new Random(22));
 
         var opening = await source.GetMoveAsync(Decision.For(Board.Empty, Player.Red), CancellationToken.None);
-        Assert.Equal(Column.From(7), Assert.IsType<MoveReply.Chosen>(opening).Column);
-        Assert.Equal(
-            ["1", "2", "3", "4", "5", "6", "7"],
-            handler.BodyOf(0).GetProperty("questions").GetProperty("column").GetProperty("criteria")
-                .EnumerateObject().Select(property => property.Name).ToArray());
+        var openingCriteria = handler.BodyOf(0).GetProperty("questions").GetProperty("column").GetProperty("criteria");
+        var openingKeys = openingCriteria.EnumerateObject().Select(property => property.Name).ToArray();
+        Assert.Equal(["opt_a", "opt_b", "opt_c", "opt_d", "opt_e", "opt_f", "opt_g"], openingKeys);
+        var openingLastKey = openingKeys[^1];
+        var openingColumn = Column.From(ColumnFromCriterion(openingCriteria.GetProperty(openingLastKey).GetString()!));
+        Assert.Equal(openingColumn, Assert.IsType<MoveReply.Chosen>(opening).Column);
 
         var afterSevenFull = Decision.For(Games.Play(7, 7, 7, 7, 7, 7), Player.Red);
         Assert.Equal([1, 2, 3, 4, 5, 6], afterSevenFull.Criteria.Select(column => column.Value).ToArray());
 
         var next = await source.GetMoveAsync(afterSevenFull, CancellationToken.None);
-        Assert.Equal(Column.From(6), Assert.IsType<MoveReply.Chosen>(next).Column);
-        Assert.Equal(
-            ["1", "2", "3", "4", "5", "6"],
-            handler.BodyOf(1).GetProperty("questions").GetProperty("column").GetProperty("criteria")
-                .EnumerateObject().Select(property => property.Name).ToArray());
+        var nextCriteria = handler.BodyOf(1).GetProperty("questions").GetProperty("column").GetProperty("criteria");
+        var nextKeys = nextCriteria.EnumerateObject().Select(property => property.Name).ToArray();
+        Assert.Equal(["opt_a", "opt_b", "opt_c", "opt_d", "opt_e", "opt_f"], nextKeys);
+        var nextLastKey = nextKeys[^1];
+        var nextColumn = Column.From(ColumnFromCriterion(nextCriteria.GetProperty(nextLastKey).GetString()!));
+        Assert.Equal(nextColumn, Assert.IsType<MoveReply.Chosen>(next).Column);
     }
 
     [Fact]
@@ -89,7 +91,7 @@ public class StackingReproTests
             $"Could not find repo src/ walking up from {AppContext.BaseDirectory}");
     }
 
-    private static string LastLegalReply(string requestBody)
+    private static string LastOpaqueKeyReply(string requestBody)
     {
         using var document = JsonDocument.Parse(requestBody);
         var root = document.RootElement;
@@ -103,6 +105,15 @@ public class StackingReproTests
             .GetProperty("schema").GetProperty("properties").GetProperty("column").GetProperty("enum")
             .EnumerateArray().Select(value => value.GetInt32()).Last();
         return FakeHandler.ChatReply($$"""{"column":{{column}},"reason":"last legal"}""");
+    }
+
+    private static int ColumnFromCriterion(string text)
+    {
+        const string marker = "[[COL:";
+        var start = text.IndexOf(marker, StringComparison.Ordinal);
+        var numberStart = start + marker.Length;
+        var end = text.IndexOf(']', numberStart);
+        return int.Parse(text[numberStart..end]);
     }
 
     private static string BoardText(string requestBody)
