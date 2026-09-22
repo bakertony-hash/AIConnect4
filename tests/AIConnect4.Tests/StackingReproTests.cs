@@ -63,7 +63,7 @@ public class StackingReproTests
     public void Source_tree_has_no_silent_legal_column_fallback()
     {
         var hits =
-            from path in Directory.GetFiles("/workspace/src", "*.cs", SearchOption.AllDirectories)
+            from path in Directory.GetFiles(RepoSrcDirectory(), "*.cs", SearchOption.AllDirectories)
             from row in File.ReadAllLines(path).Select((line, index) => (line, number: index + 1))
             where row.line.Contains("Criteria.First", StringComparison.Ordinal)
                 || row.line.Contains("Criteria.Last", StringComparison.Ordinal)
@@ -72,6 +72,21 @@ public class StackingReproTests
             select $"{path}:{row.number}:{row.line.Trim()}";
 
         Assert.Empty(hits);
+    }
+
+    private static string RepoSrcDirectory()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            var src = Path.Combine(dir.FullName, "src");
+            if (Directory.Exists(src))
+            {
+                return src;
+            }
+        }
+
+        throw new DirectoryNotFoundException(
+            $"Could not find repo src/ walking up from {AppContext.BaseDirectory}");
     }
 
     private static string LastLegalReply(string requestBody)
