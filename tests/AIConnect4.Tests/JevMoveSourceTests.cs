@@ -153,6 +153,46 @@ public class JevMoveSourceTests
     }
 
     [Fact]
+    public void After_last_move_omits_that_column_from_opaque_criteria()
+    {
+        var decision = Decision.For(Games.Play(7), Player.Yellow);
+        var assignment = JevMoveSource.OpaqueCriteria.Assign(decision, new Random(21));
+
+        Assert.Equal(6, assignment.KeyToColumn.Count);
+        Assert.DoesNotContain(7, assignment.KeyToColumn.Values.Select(column => column.Value));
+        Assert.Equal(new HashSet<int> { 1, 2, 3, 4, 5, 6 }, assignment.KeyToColumn.Values.Select(c => c.Value).ToHashSet());
+    }
+
+    [Fact]
+    public void Opening_still_offers_all_seven_columns()
+    {
+        var assignment = JevMoveSource.OpaqueCriteria.Assign(Opening, new Random(22));
+
+        Assert.Equal(7, assignment.KeyToColumn.Count);
+        Assert.Equal(new HashSet<int> { 1, 2, 3, 4, 5, 6, 7 }, assignment.KeyToColumn.Values.Select(c => c.Value).ToHashSet());
+    }
+
+    [Fact]
+    public void Last_move_column_stays_when_it_is_the_only_block()
+    {
+        var decision = Decision.For(Games.Play(1, 7, 3, 7, 5, 7), Player.Red);
+        Assert.Equal(Column.From(7), decision.LastMove!.Value.Position.Column);
+        Assert.Contains("blocks an immediate opponent win", DecisionPrompt.CriterionForSystemOne(decision, Column.From(7)));
+        Assert.All(
+            decision.Criteria.Where(column => column.Value != 7),
+            column =>
+            {
+                var text = DecisionPrompt.CriterionForSystemOne(decision, column);
+                Assert.DoesNotContain("wins immediately", text);
+                Assert.DoesNotContain("blocks an immediate opponent win", text);
+            });
+
+        var assignment = JevMoveSource.OpaqueCriteria.Assign(decision, new Random(23));
+
+        Assert.Contains(7, assignment.KeyToColumn.Values.Select(column => column.Value));
+    }
+
+    [Fact]
     public async Task Retry_carries_the_prior_failure_as_previous_attempt()
     {
         var (_, body) = await Ask(
