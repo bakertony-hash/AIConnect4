@@ -6,9 +6,9 @@ The C# Avalonia app is not in this repo yet. The design is in [PLAN.md](PLAN.md)
 
 ## What the app will do
 
-The board sits in the centre. Each side has a model picker. If the model supports it, that side also has effort and speed controls. Each side shows last and total decision time. The finished game shows combined think time.
+The board sits in the centre. Each side has a model picker. If the model supports it, that side also has effort and speed controls. Each side shows last and total decision time. Set how many games to run before Play. Win counts sit above Red and Yellow for the series.
 
-Jev uses OpenRouter's System One API. Chat models use `/v1/chat/completions`. Set `OPENROUTER_API_KEY` in the environment before you play.
+Every model call is one decision. Which legal column do you play now? Jev uses OpenRouter's System One Choice API. Chat models receive the same decision shape over `/v1/chat/completions`. Set `OPENROUTER_API_KEY` in the environment before you play.
 
 ## Implementation status
 
