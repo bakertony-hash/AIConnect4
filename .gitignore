@@ -8,4 +8,6 @@ obj/
 .env.*
 *.pfx
 *.snk
-.cursor/
+.cursor/*
+!.cursor/skills/
+!.cursor/skills/**

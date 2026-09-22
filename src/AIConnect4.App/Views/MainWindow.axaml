@@ -19,9 +19,11 @@
       <!-- Red -->
       <Border Grid.Column="0" BorderBrush="#CCC" BorderThickness="1" Padding="12" CornerRadius="4" Margin="0,0,8,0">
         <StackPanel Spacing="8">
-          <TextBlock FontSize="28" FontWeight="Bold" HorizontalAlignment="Center">
-            <Run Text="Wins: " /><Run Text="{Binding Red.Wins}" />
-          </TextBlock>
+          <!-- Single TextBlock so UIA Name is "Wins: N" (multi-Run TextBlocks expose empty Names). -->
+          <TextBlock FontSize="28"
+                     FontWeight="Bold"
+                     HorizontalAlignment="Center"
+                     Text="{Binding Red.Wins, StringFormat=Wins: {0}}" />
           <TextBlock Text="{Binding Red.Title}" FontWeight="SemiBold" FontSize="18" Foreground="Crimson" />
           <TextBlock Text="Model" />
           <ComboBox ItemsSource="{Binding Red.Options}"
@@ -96,9 +98,10 @@
       <!-- Yellow -->
       <Border Grid.Column="2" BorderBrush="#CCC" BorderThickness="1" Padding="12" CornerRadius="4" Margin="8,0,0,0">
         <StackPanel Spacing="8">
-          <TextBlock FontSize="28" FontWeight="Bold" HorizontalAlignment="Center">
-            <Run Text="Wins: " /><Run Text="{Binding Yellow.Wins}" />
-          </TextBlock>
+          <TextBlock FontSize="28"
+                     FontWeight="Bold"
+                     HorizontalAlignment="Center"
+                     Text="{Binding Yellow.Wins, StringFormat=Wins: {0}}" />
           <TextBlock Text="{Binding Yellow.Title}" FontWeight="SemiBold" FontSize="18" Foreground="#B8860B" />
           <TextBlock Text="Model" />
           <ComboBox ItemsSource="{Binding Yellow.Options}"
