@@ -39,24 +39,15 @@ public class JevMoveSourceTests
         return (result, handler.BodyOf(0));
     }
 
-    private static Dictionary<string, int> ColumnByKey(JsonElement criteria) =>
-        criteria.EnumerateObject().ToDictionary(
-            property => property.Name,
-            property =>
-            {
-                var text = property.Value.GetString() ?? "";
-                var marker = "[[COL:";
-                var start = text.IndexOf(marker, StringComparison.Ordinal);
-                Assert.True(start >= 0, text);
-                var numberStart = start + marker.Length;
-                var end = text.IndexOf(']', numberStart);
-                return int.Parse(text[numberStart..end]);
-            });
+    private static int[] ColumnOrder(Decision decision, Random random) =>
+        JevMoveSource.OpaqueCriteria.Assign(decision, random).KeyToColumn.Values.Select(column => column.Value).ToArray();
 
     [Fact]
     public async Task Request_is_one_choice_question_with_opaque_keys()
     {
-        var (_, body) = await Ask(ColumnOneFull, Choosing("opt_a"), new Random(1));
+        var seed = new Random(1);
+        var expected = JevMoveSource.OpaqueCriteria.Assign(ColumnOneFull, new Random(1));
+        var (_, body) = await Ask(ColumnOneFull, Choosing("opt_a"), seed);
 
         Assert.Equal("typesafe/jev-1.13", body.GetProperty("model").GetString());
         var column = body.GetProperty("questions").GetProperty("column");
@@ -66,9 +57,15 @@ public class JevMoveSourceTests
         Assert.All(keys, key => Assert.DoesNotContain(key, new[] { "1", "2", "3", "4", "5", "6", "7" }));
         Assert.StartsWith("Which legal column should you play?", column.GetProperty("instructions").GetString());
         Assert.Contains("state.board", column.GetProperty("instructions").GetString());
-        var byKey = ColumnByKey(column.GetProperty("criteria"));
-        Assert.Equal(new HashSet<int> { 2, 3, 4, 5, 6, 7 }, byKey.Values.ToHashSet());
-        Assert.StartsWith("[[COL:", column.GetProperty("criteria").GetProperty("opt_a").GetString());
+        Assert.Equal(new HashSet<int> { 2, 3, 4, 5, 6, 7 }, expected.KeyToColumn.Values.Select(c => c.Value).ToHashSet());
+        Assert.Equal("Empty. A disc drops to row 0.", column.GetProperty("criteria").GetProperty("opt_a").GetString());
+        Assert.All(
+            column.GetProperty("criteria").EnumerateObject().Select(property => property.Value.GetString() ?? ""),
+            text =>
+            {
+                Assert.DoesNotContain("[[COL:", text, StringComparison.Ordinal);
+                Assert.DoesNotContain("Column ", text, StringComparison.Ordinal);
+            });
         var state = body.GetProperty("state");
         Assert.Equal(Decision.Rules, state.GetProperty("rules").GetString());
         Assert.Equal("You are Red (R). It is your move.", state.GetProperty("you_are").GetString());
@@ -85,46 +82,60 @@ public class JevMoveSourceTests
         var (_, bodyA) = await Ask(Opening, Choosing("opt_a"), new Random(1));
         var (_, bodyB) = await Ask(Opening, Choosing("opt_a"), new Random(2));
 
-        var orderA = ColumnByKey(bodyA.GetProperty("questions").GetProperty("column").GetProperty("criteria"))
-            .Select(pair => pair.Value)
-            .ToArray();
-        var orderB = ColumnByKey(bodyB.GetProperty("questions").GetProperty("column").GetProperty("criteria"))
-            .Select(pair => pair.Value)
-            .ToArray();
+        var orderA = ColumnOrder(Opening, new Random(1));
+        var orderB = ColumnOrder(Opening, new Random(2));
+        var keysA = bodyA.GetProperty("questions").GetProperty("column").GetProperty("criteria")
+            .EnumerateObject().Select(property => property.Name).ToArray();
+        var keysB = bodyB.GetProperty("questions").GetProperty("column").GetProperty("criteria")
+            .EnumerateObject().Select(property => property.Name).ToArray();
 
         Assert.Equal(7, orderA.Length);
         Assert.Equal(new HashSet<int> { 1, 2, 3, 4, 5, 6, 7 }, orderA.ToHashSet());
         Assert.Equal(new HashSet<int> { 1, 2, 3, 4, 5, 6, 7 }, orderB.ToHashSet());
         Assert.NotEqual(orderA, orderB);
+        Assert.Equal(["opt_a", "opt_b", "opt_c", "opt_d", "opt_e", "opt_f", "opt_g"], keysA);
+        Assert.Equal(keysA, keysB);
     }
 
     [Fact]
-    public async Task Criteria_keep_stack_facts_and_win_block_markers_under_opaque_keys()
+    public async Task Criteria_use_SystemOne_stack_facts_and_win_block_without_digit_column_markers()
     {
         var stackDecision = Decision.For(Games.Play(4, 4, 4), Player.Yellow);
+        var stackAssignment = JevMoveSource.OpaqueCriteria.Assign(stackDecision, new Random(3));
         var (_, stackBody) = await Ask(stackDecision, Choosing("opt_a"), new Random(3));
         var stackCriteria = stackBody.GetProperty("questions").GetProperty("column").GetProperty("criteria");
-        var stackByColumn = ColumnByKey(stackCriteria).ToDictionary(pair => pair.Value, pair => pair.Key);
+        var keyForFour = stackAssignment.KeyToColumn.Single(pair => pair.Value.Value == 4).Key;
+        var keyForOne = stackAssignment.KeyToColumn.Single(pair => pair.Value.Value == 1).Key;
         Assert.Equal(
-            "[[COL:4]] Column 4 has 3 disc(s) from the bottom: R-Y-R. Next disc lands on row 3.",
-            stackCriteria.GetProperty(stackByColumn[4]).GetString());
+            "3 disc(s) from the bottom: R-Y-R. Next disc lands on row 3.",
+            stackCriteria.GetProperty(keyForFour).GetString());
         Assert.Equal(
-            "[[COL:1]] Column 1 is empty. A disc drops to row 0.",
-            stackCriteria.GetProperty(stackByColumn[1]).GetString());
+            "Empty. A disc drops to row 0.",
+            stackCriteria.GetProperty(keyForOne).GetString());
 
         var winDecision = Decision.For(Games.Play(1, 7, 2, 7, 3, 6), Player.Red);
         var (_, winBody) = await Ask(winDecision, Choosing("opt_a"), new Random(4));
-        var winCriteria = winBody.GetProperty("questions").GetProperty("column").GetProperty("criteria");
-        var winTexts = winCriteria.EnumerateObject().Select(property => property.Value.GetString() ?? "").ToList();
-        Assert.Contains(winTexts, text => text.Contains("[[COL:4]]", StringComparison.Ordinal)
-            && text.Contains("Playing here wins immediately.", StringComparison.Ordinal));
+        var winTexts = winBody.GetProperty("questions").GetProperty("column").GetProperty("criteria")
+            .EnumerateObject().Select(property => property.Value.GetString() ?? "").ToList();
+        Assert.Contains(winTexts, text => text == "Empty. A disc drops to row 0. Playing here wins immediately.");
+        Assert.All(winTexts, text =>
+        {
+            Assert.DoesNotContain("[[COL:", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("Column ", text, StringComparison.Ordinal);
+        });
 
         var blockDecision = Decision.For(Games.Play(7, 1, 7, 1, 6, 1), Player.Red);
         var (_, blockBody) = await Ask(blockDecision, Choosing("opt_a"), new Random(5));
         var blockTexts = blockBody.GetProperty("questions").GetProperty("column").GetProperty("criteria")
             .EnumerateObject().Select(property => property.Value.GetString() ?? "").ToList();
-        Assert.Contains(blockTexts, text => text.Contains("[[COL:1]]", StringComparison.Ordinal)
-            && text.Contains("Playing here blocks an immediate opponent win.", StringComparison.Ordinal));
+        Assert.Contains(
+            blockTexts,
+            text => text == "3 disc(s) from the bottom: Y-Y-Y. Next disc lands on row 3. Playing here blocks an immediate opponent win.");
+        Assert.All(blockTexts, text =>
+        {
+            Assert.DoesNotContain("[[COL:", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("Column ", text, StringComparison.Ordinal);
+        });
     }
 
     [Fact]
@@ -136,6 +147,9 @@ public class JevMoveSourceTests
             .EnumerateObject().Select(property => property.Name).ToArray();
         Assert.Equal(["opt_a", "opt_b", "opt_c", "opt_d", "opt_e", "opt_f", "opt_g"], keys);
         Assert.False(body.GetProperty("state").TryGetProperty("last_move", out _));
+        var values = body.GetProperty("questions").GetProperty("column").GetProperty("criteria")
+            .EnumerateObject().Select(property => property.Value.GetString() ?? "").Distinct().ToArray();
+        Assert.Equal(["Empty. A disc drops to row 0."], values);
     }
 
     [Fact]
@@ -152,20 +166,14 @@ public class JevMoveSourceTests
     [Fact]
     public async Task Opaque_choice_maps_to_the_assigned_column_with_reason()
     {
-        var handler = FakeHandler.FromRequest(body =>
+        var assignment = JevMoveSource.OpaqueCriteria.Assign(ColumnOneFull, new Random(8));
+        var keyForFour = assignment.KeyToColumn.Single(pair => pair.Value.Value == 4).Key;
+        var handler = FakeHandler.FromRequest(_ => ChoiceWith(keyForFour, 0.82, new Dictionary<string, double>
         {
-            using var document = JsonDocument.Parse(body);
-            var criteria = document.RootElement.GetProperty("questions").GetProperty("column").GetProperty("criteria");
-            var keyForFour = criteria.EnumerateObject()
-                .Single(property => (property.Value.GetString() ?? "").Contains("[[COL:4]]", StringComparison.Ordinal))
-                .Name;
-            return ChoiceWith(keyForFour, 0.82, new Dictionary<string, double>
-            {
-                [keyForFour] = 0.82,
-                ["opt_a"] = 0.05,
-                ["opt_b"] = 0.13,
-            });
-        });
+            [keyForFour] = 0.82,
+            ["opt_a"] = 0.05,
+            ["opt_b"] = 0.13,
+        }));
         var source = new JevMoveSource(FakeHandler.Client(handler), ModelCatalog.Jev, new Random(8));
         var reply = await source.GetMoveAsync(ColumnOneFull, CancellationToken.None);
 

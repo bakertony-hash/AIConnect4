@@ -19,4 +19,8 @@
     <ProjectReference Include="..\AIConnect4.Core\AIConnect4.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="AIConnect4.Tests" />
+  </ItemGroup>
+
 </Project>
