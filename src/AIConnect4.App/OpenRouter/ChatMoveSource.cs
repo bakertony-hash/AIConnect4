@@ -57,6 +57,7 @@ public sealed class ChatMoveSource : IMoveSource
             DecisionPrompt.LastMove(decision),
             DecisionPrompt.PriorFailure(decision),
             DecisionPrompt.LegalColumns(decision),
+            DecisionPrompt.PlayReminder(decision),
             Decision.Question,
             _profile.AnswerFormat == AnswerFormat.Text ? TextFormatLine : JsonFormatLine,
         ];

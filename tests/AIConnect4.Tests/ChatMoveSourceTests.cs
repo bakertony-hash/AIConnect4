@@ -44,6 +44,7 @@ public class ChatMoveSourceTests
         Assert.Equal("user", messages[1].GetProperty("role").GetString());
         Assert.Contains("Legal columns: 2, 3, 4, 5, 6, 7.", UserMessage(body));
         Assert.Contains("Which legal column should you play?", UserMessage(body));
+        Assert.Contains("Study the board grid above.", UserMessage(body));
         Assert.Contains("Yellow played column 1.", UserMessage(body));
         Assert.EndsWith("""Answer with JSON only: {"column": <one of the legal columns>, "reason": "<one sentence>"}.""", UserMessage(body));
         var format = body.GetProperty("response_format");

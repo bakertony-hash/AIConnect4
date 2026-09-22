@@ -30,9 +30,12 @@ public class JevMoveSourceTests
         Assert.Equal("typesafe/jev-1.13", body.GetProperty("model").GetString());
         var column = body.GetProperty("questions").GetProperty("column");
         Assert.Equal("choice", column.GetProperty("type").GetString());
-        Assert.Equal("Which legal column should you play?", column.GetProperty("instructions").GetString());
         Assert.Equal(["2", "3", "4", "5", "6", "7"], column.GetProperty("criteria").EnumerateObject().Select(property => property.Name));
-        Assert.Equal("Drop your disc in column 2", column.GetProperty("criteria").GetProperty("2").GetString());
+        Assert.Equal(
+            "Column 2 is empty. A disc drops to row 0.",
+            column.GetProperty("criteria").GetProperty("2").GetString());
+        Assert.StartsWith("Which legal column should you play?", column.GetProperty("instructions").GetString());
+        Assert.Contains("state.board", column.GetProperty("instructions").GetString());
         var state = body.GetProperty("state");
         Assert.Equal(Decision.Rules, state.GetProperty("rules").GetString());
         Assert.Equal("You are Red (R). It is your move.", state.GetProperty("you_are").GetString());
@@ -41,6 +44,21 @@ public class JevMoveSourceTests
         Assert.False(body.TryGetProperty("reasoning", out _));
         Assert.False(body.TryGetProperty("provider", out _));
         Assert.False(state.TryGetProperty("previous_attempt", out _));
+    }
+
+    [Fact]
+    public async Task Criteria_describe_each_column_stack_from_the_bottom()
+    {
+        var decision = Decision.For(Games.Play(4, 4, 4), Player.Yellow);
+        var (_, body) = await Ask(decision, ChoiceReply);
+
+        var criteria = body.GetProperty("questions").GetProperty("column").GetProperty("criteria");
+        Assert.Equal(
+            "Column 4 has 3 disc(s) from the bottom: R-Y-R. Next disc lands on row 3.",
+            criteria.GetProperty("4").GetString());
+        Assert.Equal(
+            "Column 1 is empty. A disc drops to row 0.",
+            criteria.GetProperty("1").GetString());
     }
 
     [Fact]

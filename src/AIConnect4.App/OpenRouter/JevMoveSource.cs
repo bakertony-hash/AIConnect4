@@ -37,8 +37,8 @@ public sealed class JevMoveSource : IMoveSource
             new Dictionary<string, ChoiceQuestion>
             {
                 [QuestionName] = new ChoiceQuestion(
-                    Decision.Question,
-                    decision.Criteria.ToDictionary(column => column.ToString(), column => $"Drop your disc in column {column}")),
+                    DecisionPrompt.ChoiceInstructions(decision),
+                    decision.Criteria.ToDictionary(column => column.ToString(), column => DecisionPrompt.Criterion(decision, column))),
             });
 
         return await _client.PostAsync(Path, request, cancellationToken) switch
