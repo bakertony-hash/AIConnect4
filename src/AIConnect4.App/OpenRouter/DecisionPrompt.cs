@@ -20,10 +20,19 @@ public static class DecisionPrompt
     public static string LegalColumns(Decision decision) => $"Legal columns: {string.Join(", ", decision.Criteria)}.";
 
     /// <summary>
-    /// One Choice option boundary for <paramref name="column"/>: unique column token, stack facts, and one-ply win/block.
-    /// Host-owned so a System One model need not count the grid or invent tactics from soft instructions.
+    /// Numbered Choice option for chat or enum-style models: unique <c>[[COL:N]]</c> token, stack facts, and one-ply win/block.
     /// </summary>
-    public static string Criterion(Decision decision, Column column)
+    public static string Criterion(Decision decision, Column column) =>
+        $"[[COL:{column}]] {StackFacts(decision, column, nameColumn: true)}{TacticSuffix(decision, column)}";
+
+    /// <summary>
+    /// System One Choice option: stack facts and one-ply win/block only. No column number and no <c>[[COL:N]]</c>,
+    /// so opaque keys stay the sole column identity on the wire.
+    /// </summary>
+    public static string CriterionForSystemOne(Decision decision, Column column) =>
+        $"{StackFacts(decision, column, nameColumn: false)}{TacticSuffix(decision, column)}";
+
+    private static string StackFacts(Decision decision, Column column, bool nameColumn)
     {
         var discs = new List<char>(BoardGrid.Rows);
         for (var row = 0; row < BoardGrid.Rows; row++)
@@ -36,11 +45,15 @@ public static class DecisionPrompt
             discs.Add(player.Disc());
         }
 
-        var stack = discs.Count == 0
-            ? $"Column {column} is empty. A disc drops to row 0."
-            : $"Column {column} has {discs.Count} disc(s) from the bottom: {string.Join('-', discs)}. Next disc lands on row {discs.Count}.";
+        if (discs.Count == 0)
+        {
+            return nameColumn
+                ? $"Column {column} is empty. A disc drops to row 0."
+                : "Empty. A disc drops to row 0.";
+        }
 
-        return $"[[COL:{column}]] {stack}{TacticSuffix(decision, column)}";
+        var stack = $"{discs.Count} disc(s) from the bottom: {string.Join('-', discs)}. Next disc lands on row {discs.Count}.";
+        return nameColumn ? $"Column {column} has {stack}" : stack;
     }
 
     /// <summary>One-ply win, else one-ply block, else empty. Uses <see cref="Board.Drop"/> only.</summary>
@@ -62,7 +75,7 @@ public static class DecisionPrompt
     /// <summary>System One Choice instructions: the shared question plus where to read the board in <c>state</c>.</summary>
     public static string ChoiceInstructions(Decision decision) =>
         $"{Decision.Question} Read state.board (top row first, R/Y/.) and state.last_move. " +
-        $"You are {decision.YouAre.Disc()}. Each criterion names its column, stack, and any host win or block marker.";
+        $"You are {decision.YouAre.Disc()}. Each criterion describes one legal drop's stack and any host win or block marker.";
 
     /// <summary>One chat reminder after the legal list. Still one column decision.</summary>
     public static string PlayReminder(Decision decision) =>

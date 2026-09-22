@@ -41,13 +41,22 @@ public class StackingReproTests
         var handler = FakeHandler.FromRequest(LastOpaqueKeyReply);
         var source = new JevMoveSource(FakeHandler.Client(handler), ModelCatalog.Jev, new Random(22));
 
-        var opening = await source.GetMoveAsync(Decision.For(Board.Empty, Player.Red), CancellationToken.None);
+        var mapRng = new Random(22);
+        var openingDecision = Decision.For(Board.Empty, Player.Red);
+        var opening = await source.GetMoveAsync(openingDecision, CancellationToken.None);
         var openingCriteria = handler.BodyOf(0).GetProperty("questions").GetProperty("column").GetProperty("criteria");
         var openingKeys = openingCriteria.EnumerateObject().Select(property => property.Name).ToArray();
         Assert.Equal(["opt_a", "opt_b", "opt_c", "opt_d", "opt_e", "opt_f", "opt_g"], openingKeys);
         var openingLastKey = openingKeys[^1];
-        var openingColumn = Column.From(ColumnFromCriterion(openingCriteria.GetProperty(openingLastKey).GetString()!));
+        var openingColumn = JevMoveSource.OpaqueCriteria.Assign(openingDecision, mapRng).KeyToColumn[openingLastKey];
         Assert.Equal(openingColumn, Assert.IsType<MoveReply.Chosen>(opening).Column);
+        Assert.All(
+            openingCriteria.EnumerateObject().Select(property => property.Value.GetString() ?? ""),
+            text =>
+            {
+                Assert.DoesNotContain("[[COL:", text, StringComparison.Ordinal);
+                Assert.DoesNotContain("Column ", text, StringComparison.Ordinal);
+            });
 
         var afterSevenFull = Decision.For(Games.Play(7, 7, 7, 7, 7, 7), Player.Red);
         Assert.Equal([1, 2, 3, 4, 5, 6], afterSevenFull.Criteria.Select(column => column.Value).ToArray());
@@ -57,7 +66,7 @@ public class StackingReproTests
         var nextKeys = nextCriteria.EnumerateObject().Select(property => property.Name).ToArray();
         Assert.Equal(["opt_a", "opt_b", "opt_c", "opt_d", "opt_e", "opt_f"], nextKeys);
         var nextLastKey = nextKeys[^1];
-        var nextColumn = Column.From(ColumnFromCriterion(nextCriteria.GetProperty(nextLastKey).GetString()!));
+        var nextColumn = JevMoveSource.OpaqueCriteria.Assign(afterSevenFull, mapRng).KeyToColumn[nextLastKey];
         Assert.Equal(nextColumn, Assert.IsType<MoveReply.Chosen>(next).Column);
     }
 
@@ -105,15 +114,6 @@ public class StackingReproTests
             .GetProperty("schema").GetProperty("properties").GetProperty("column").GetProperty("enum")
             .EnumerateArray().Select(value => value.GetInt32()).Last();
         return FakeHandler.ChatReply($$"""{"column":{{column}},"reason":"last legal"}""");
-    }
-
-    private static int ColumnFromCriterion(string text)
-    {
-        const string marker = "[[COL:";
-        var start = text.IndexOf(marker, StringComparison.Ordinal);
-        var numberStart = start + marker.Length;
-        var end = text.IndexOf(']', numberStart);
-        return int.Parse(text[numberStart..end]);
     }
 
     private static string BoardText(string requestBody)
