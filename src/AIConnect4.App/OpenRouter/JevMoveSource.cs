@@ -35,7 +35,7 @@ public sealed class JevMoveSource : IMoveSource
                 Decision.Rules,
                 DecisionPrompt.WhoYouAre(decision),
                 DecisionPrompt.Board(decision),
-                DecisionPrompt.LastMove(decision),
+                DecisionPrompt.LastMoveForSystemOne(decision),
                 DecisionPrompt.PriorFailure(decision)),
             new Dictionary<string, ChoiceQuestion>
             {
@@ -100,12 +100,13 @@ public sealed class JevMoveSource : IMoveSource
     /// <summary>
     /// Opaque Choice keys in shuffled insertion order so System One positional bias cannot agree on a column index.
     /// Values use <see cref="DecisionPrompt.CriterionForSystemOne"/> (stack and win/block only; no column numbers).
+    /// After a last move, that column is omitted unless its System One criterion carries a win or block suffix.
     /// </summary>
     internal static class OpaqueCriteria
     {
         public static Assignment Assign(Decision decision, Random random)
         {
-            var columns = decision.Criteria.ToArray();
+            var columns = EligibleColumns(decision);
             Shuffle(columns, random);
 
             var criteria = new Dictionary<string, string>(columns.Length);
@@ -119,6 +120,32 @@ public sealed class JevMoveSource : IMoveSource
             }
 
             return new Assignment(criteria, keyToColumn);
+        }
+
+        /// <summary>
+        /// Legal columns minus the last-played column when that column is not a forced one-ply win or block.
+        /// Falls back to the full legal set if filtering would leave none.
+        /// </summary>
+        private static Column[] EligibleColumns(Decision decision)
+        {
+            var legal = decision.Criteria.ToArray();
+            if (decision.Board.LastMove is not { } last)
+            {
+                return legal;
+            }
+
+            var lastColumn = last.Position.Column;
+            var filtered = legal
+                .Where(column => column != lastColumn || HasWinOrBlockSuffix(decision, column))
+                .ToArray();
+            return filtered.Length == 0 ? legal : filtered;
+        }
+
+        private static bool HasWinOrBlockSuffix(Decision decision, Column column)
+        {
+            var text = DecisionPrompt.CriterionForSystemOne(decision, column);
+            return text.Contains("wins immediately", StringComparison.Ordinal)
+                || text.Contains("blocks an immediate opponent win", StringComparison.Ordinal);
         }
 
         private static void Shuffle(Column[] columns, Random random)
