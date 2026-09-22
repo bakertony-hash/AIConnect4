@@ -70,6 +70,17 @@
           </StackPanel>
           <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" HorizontalAlignment="Center" />
           <TextBlock Text="{Binding Draws, StringFormat=Draws: {0}}" HorizontalAlignment="Center" />
+          <TextBlock Text="Session model time"
+                     FontWeight="SemiBold"
+                     HorizontalAlignment="Center"
+                     Margin="0,8,0,0" />
+          <ItemsControl ItemsSource="{Binding SessionModelTotals}" HorizontalAlignment="Center">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ModelDecisionTotalRow">
+                <TextBlock Text="{Binding LineText}" HorizontalAlignment="Center" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
         </StackPanel>
 
         <Border Background="#1E3A5F" Padding="12" CornerRadius="4" HorizontalAlignment="Center" VerticalAlignment="Center">
